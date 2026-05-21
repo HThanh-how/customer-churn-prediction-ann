@@ -11,6 +11,33 @@
 \usepackage{hyperref}
 \usepackage{indentfirst}
 \usepackage{xcolor}
+\usepackage{listings}
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.96,0.96,0.96}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{blue}\bfseries,
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\small,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=8pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=4
+}
+
+\lstset{style=mystyle}
 
 \geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
 
@@ -157,6 +184,66 @@ Churn (1) & 0.79 & 0.40 & 0.53 & 407 \\
 \bottomrule
 \end{tabular}
 \end{table}
+
+\section{Mã nguồn chương trình}
+Dưới đây là mã nguồn Python chi tiết triển khai mô hình mạng ANN dự đoán Churn Customer bằng TensorFlow/Keras:
+
+\begin{lstlisting}[language=Python, caption=Mã nguồn tiền xử lý dữ liệu và huấn luyện mạng ANN]
+# Import cac thu vien can thiet
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense
+import numpy as np
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
+
+# 1. Doc va tien xu ly du lieu
+dataset = pd.read_csv('Churn_Modelling.csv')
+X = dataset.drop(labels=['CustomerId', 'Surname', 'RowNumber', 'Exited'], axis=1)
+y = dataset['Exited']
+
+# Ma hoa Label Encoding cho cot Geography va Gender
+label_geo = LabelEncoder()
+X['Geography'] = label_geo.fit_transform(X['Geography'])
+label_gender = LabelEncoder()
+X['Gender'] = label_gender.fit_transform(X['Gender'])
+
+# Ma hoa One-Hot Encoding cho Geography de tranh dummy variable trap
+X = pd.get_dummies(X, drop_first=True, columns=['Geography'])
+
+# Phan tach tap Train/Test (ty le 80/20)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0, stratify=y)
+
+# Chuan hoa du lieu bang StandardScaler
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# 2. Xay dung cau truc mang ANN tuan tu
+model = Sequential()
+model.add(Dense(X.shape[1], activation='relu', input_dim=X.shape[1]))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(1, activation='sigmoid'))
+
+# Bien dich mo hinh
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# Huan luyen mo hinh
+history = model.fit(X_train, y_train.to_numpy(), batch_size=10, epochs=10, validation_split=0.1, verbose=1)
+
+# 3. Du doan va danh gia
+y_pred = model.predict(X_test)
+y_pred = (y_pred > 0.5).astype("int32")
+
+# Danh gia do chinh xac va ma tran nham lan
+test_loss, test_acc = model.evaluate(X_test, y_test.to_numpy())
+cm = confusion_matrix(y_test, y_pred)
+print("Accuracy Score:", accuracy_score(y_test, y_pred))
+print(classification_report(y_test, y_pred))
+\end{lstlisting}
 
 \section{Kết luận}
 Mô hình ANN được xây dựng trong bài Lab 4.1 đã chứng minh hiệu quả khả quan trong việc nhận diện khách hàng có xu hướng rời bỏ dịch vụ ngân hàng với độ chính xác đạt trên 85\%. 
