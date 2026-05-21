@@ -76,7 +76,7 @@ Các cột không có giá trị phân tích hành vi bao gồm \texttt{RowNumbe
     \item \textbf{Mã hóa biến phân loại (Categorical Encoding):} 
     Các cột dạng chữ như \texttt{Geography} và \texttt{Gender} được chuyển đổi thành dạng số bằng \texttt{LabelEncoder}.
     \item \textbf{One-Hot Encoding:} 
-    Vì \texttt{Geography} chứa 3 lớp (France, Spain, Germany) có tính chất định danh phi thứ tự, ta thực hiện One-Hot Encoding bằng hàm \texttt{pd.get_dummies} với tham số \texttt{drop\_first=True} nhằm tránh bẫy đa cộng tuyến, sinh ra 2 đặc trưng mới là \texttt{Geography\_1} và \texttt{Geography\_2}.
+    Vì \texttt{Geography} chứa 3 lớp (France, Spain, Germany) có tính chất định danh phi thứ tự, ta thực hiện One-Hot Encoding bằng hàm \texttt{pd.get\_dummies} với tham số \texttt{drop\_first=True} nhằm tránh bẫy đa cộng tuyến, sinh ra 2 đặc trưng mới là \texttt{Geography\_1} và \texttt{Geography\_2}.
     \item \textbf{Chia tập dữ liệu (Train/Test Split):}
     Dữ liệu được chia theo tỷ lệ 80\% huấn luyện và 20\% kiểm thử. Việc chia dữ liệu được phân tầng (\texttt{stratify=y}) để đảm bảo tỷ lệ nhãn lớp giữa tập huấn luyện và tập kiểm thử tương đồng với phân phối thực tế của dữ liệu.
     \item \textbf{Chuẩn hóa đặc trưng (Feature Scaling):}
