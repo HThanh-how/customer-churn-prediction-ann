@@ -1,0 +1,166 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[vietnamese]{babel}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{indentfirst}
+\usepackage{xcolor}
+
+\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={Báo cáo Lab 4.1: Xây dựng ANN với TensorFlow},
+    pdfpagemode=FullScreen,
+}
+
+\title{
+    \textbf{BÁO CÁO THỰC HÀNH LAB 4.1} \\
+    \Large{XÂY DỰNG MẠNG NƠ-RON NHÂN TẠO (ANN) VỚI TENSORFLOW\\ DỰ ĐOÁN SỰ RỜI BỎ DỊCH VỤ CỦA KHÁCH HÀNG (CUSTOMER CHURN)}
+}
+\author{\textbf{Sinh viên thực hiện:} Triệu Minh Trí}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Báo cáo này trình bày chi tiết quá trình thực hiện bài thực hành Lab 4.1 về việc xây dựng mạng nơ-ron nhân tạo (ANN) tuần tự để dự đoán hành vi rời mạng của khách hàng (customer churn) dựa trên bộ dữ liệu \texttt{Churn\_Modelling.csv}. Quá trình bao gồm các công đoạn chuẩn bị dữ liệu, tiền xử lý và mã hóa dữ liệu phân loại, phân chia tập dữ liệu huấn luyện/kiểm thử, chuẩn hóa đặc trưng bằng \texttt{StandardScaler}, định nghĩa kiến trúc mạng nơ-ron sử dụng thư viện TensorFlow/Keras, cấu hình tham số huấn luyện, và đánh giá mô hình bằng độ chính xác cùng ma trận nhầm lẫn (confusion matrix). Kết quả thực nghiệm cho thấy mô hình mạng ANN được đề xuất đạt được độ chính xác cao khoảng 85\%-86\% trên tập kiểm thử sau 10 epochs huấn luyện.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\section{Giới thiệu bài toán}
+Trong lĩnh vực kinh doanh và dịch vụ (như ngân hàng, viễn thông, SaaS), việc giữ chân khách hàng (customer retention) đóng vai trò sống còn đối với sự phát triển bền vững của doanh nghiệp. Việc xác định trước những khách hàng có nguy cơ cao rời bỏ dịch vụ (customer churn) giúp bộ phận chăm sóc khách hàng có những biện pháp kịp thời (ưu đãi, khuyến mại, cải thiện dịch vụ) nhằm giữ chân họ. 
+
+Mục tiêu của bài thực hành Lab 4.1 này là xây dựng một mô hình học sâu dạng mạng nơ-ron nhân tạo truyền thẳng (Feedforward Artificial Neural Network - ANN) để dự đoán khả năng một khách hàng sẽ rời bỏ dịch vụ dựa trên các thông tin hồ sơ cá nhân và lịch sử tương tác của họ với hệ thống.
+
+\section{Mô tả bộ dữ liệu và Tiền xử lý}
+Bộ dữ liệu \texttt{Churn\_Modelling.csv} bao gồm thông tin của 10,000 khách hàng ngân hàng. Mỗi dòng dữ liệu chứa các thông tin sau:
+\begin{itemize}
+    \item \textbf{Biến độc lập (Features):}
+    \begin{itemize}
+        \item \texttt{CreditScore}: Điểm tín dụng.
+        \item \texttt{Geography}: Quốc gia (Pháp, Tây Ban Nha, Đức).
+        \item \texttt{Gender}: Giới tính (Nam, Nữ).
+        \item \texttt{Age}: Tuổi.
+        \item \texttt{Tenure}: Số năm gắn bó với ngân hàng.
+        \item \texttt{Balance}: Số dư tài khoản.
+        \item \texttt{NumOfProducts}: Số sản phẩm sử dụng của ngân hàng.
+        \item \texttt{HasCrCard}: Khách hàng có thẻ tín dụng hay không (0: Không, 1: Có).
+        \item \texttt{IsActiveMember}: Khách hàng có hoạt động tích cực hay không (0: Không, 1: Có).
+        \item \texttt{EstimatedSalary}: Mức lương ước lượng của khách hàng.
+    \end{itemize}
+    \item \textbf{Biến đích (Target):}
+    \begin{itemize}
+        \item \texttt{Exited}: Khách hàng đã rời bỏ ngân hàng (1) hay vẫn ở lại (0).
+    \end{itemize}
+\end{itemize}
+
+Các cột không có giá trị phân tích hành vi bao gồm \texttt{RowNumber}, \texttt{CustomerId}, và \texttt{Surname} đã bị loại bỏ trước khi đưa vào mô hình huấn luyện.
+
+\subsection{Các bước tiền xử lý dữ liệu}
+\begin{enumerate}
+    \item \textbf{Mã hóa biến phân loại (Categorical Encoding):} 
+    Các cột dạng chữ như \texttt{Geography} và \texttt{Gender} được chuyển đổi thành dạng số bằng \texttt{LabelEncoder}.
+    \item \textbf{One-Hot Encoding:} 
+    Vì \texttt{Geography} chứa 3 lớp (France, Spain, Germany) có tính chất định danh phi thứ tự, ta thực hiện One-Hot Encoding bằng hàm \texttt{pd.get_dummies} với tham số \texttt{drop\_first=True} nhằm tránh bẫy đa cộng tuyến, sinh ra 2 đặc trưng mới là \texttt{Geography\_1} và \texttt{Geography\_2}.
+    \item \textbf{Chia tập dữ liệu (Train/Test Split):}
+    Dữ liệu được chia theo tỷ lệ 80\% huấn luyện và 20\% kiểm thử. Việc chia dữ liệu được phân tầng (\texttt{stratify=y}) để đảm bảo tỷ lệ nhãn lớp giữa tập huấn luyện và tập kiểm thử tương đồng với phân phối thực tế của dữ liệu.
+    \item \textbf{Chuẩn hóa đặc trưng (Feature Scaling):}
+    Vì các đặc trưng có thang đo rất khác nhau (ví dụ: \texttt{Age} từ 18-92, \texttt{Balance} lên đến hàng trăm ngàn USD), ta áp dụng \texttt{StandardScaler} để chuẩn hóa các thuộc tính về phân phối chuẩn có trung bình bằng 0 và phương sai bằng 1:
+    \begin{equation}
+        z = \frac{x - \mu}{\sigma}
+    \end{equation}
+\end{enumerate}
+
+\section{Kiến trúc mạng nơ-ron nhân tạo (ANN)}
+Mô hình ANN tuần tự (\texttt{Sequential}) được xây dựng với cấu trúc gồm 3 lớp chính:
+\begin{enumerate}
+    \item \textbf{Lớp đầu tiên (Input \& Hidden Layer 1):} Gồm $D = 11$ nút (bằng số chiều đặc trưng đầu vào), liên kết toàn phần (\texttt{Dense}), hàm kích hoạt \texttt{ReLU}.
+    \item \textbf{Lớp ẩn thứ hai (Hidden Layer 2):} Gồm $128$ nút, hàm kích hoạt \texttt{ReLU}. Lớp này giúp học các tổ hợp đặc trưng phi tuyến nâng cao từ lớp đầu.
+    \item \textbf{Lớp đầu ra (Output Layer):} Gồm $1$ nút, hàm kích hoạt \texttt{Sigmoid} nhằm đưa ra xác suất dự đoán $p \in [0, 1]$ về hành vi rời bỏ dịch vụ của khách hàng:
+    \begin{equation}
+        S(x) = \frac{1}{1 + e^{-x}}
+    \end{equation}
+\end{enumerate}
+
+Mô hình được huấn luyện bằng hàm tối ưu \texttt{Adam} với tốc độ học (learning rate) tự điều chỉnh, hàm mất mát là \texttt{Binary Cross-Entropy} phù hợp với bài toán phân loại nhị phân:
+\begin{equation}
+    \mathcal{L} = -\frac{1}{N}\sum_{i=1}^N \left[ y_i \log(p_i) + (1 - y_i) \log(1 - p_i) \right]
+\end{equation}
+
+\section{Kết quả thực nghiệm}
+Quá trình huấn luyện mô hình được thực hiện trong 10 epochs với kích thước batch bằng 10. Sự biến thiên của giá trị hàm mất mát (loss) và độ chính xác (accuracy) được ghi nhận chi tiết qua từng epoch.
+
+\subsection{Quá trình học tập của mô hình}
+Hình \ref{fig:history} biểu diễn sự thay đổi của Loss và Accuracy trên tập Huấn luyện (Train) và tập Validation trong suốt 10 epochs.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{training_history.png}
+    \caption{Biểu đồ lịch sử huấn luyện của mô hình ANN (Loss và Accuracy)}
+    \label{fig:history}
+\end{figure}
+
+Từ biểu đồ, ta thấy hàm mất mát liên tục giảm và độ chính xác tăng đều đặn qua các epoch, chứng tỏ mạng ANN đang học các đặc trưng tốt từ bộ dữ liệu mà không xuất hiện dấu hiệu quá khớp (overfitting) nghiêm trọng.
+
+\subsection{Kết quả đánh giá trên tập kiểm thử (Test Set)}
+Sau khi huấn luyện xong, mô hình được kiểm thử độc lập trên tập test (gồm 2,000 khách hàng chưa từng xuất hiện trong quá trình huấn luyện). Kết quả thu được như sau:
+\begin{itemize}
+    \item \textbf{Test Loss:} 0.3549
+    \item \textbf{Test Accuracy:} 85.65\%
+\end{itemize}
+
+\subsection{Ma trận nhầm lẫn và Chỉ số phân loại}
+Chi tiết về hiệu suất phân loại của mô hình trên tập kiểm thử được trực quan hóa qua Ma trận nhầm lẫn (Hình \ref{fig:confusion_matrix}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{confusion_matrix.png}
+    \caption{Ma trận nhầm lẫn của mô hình dự đoán rời bỏ khách hàng}
+    \label{fig:confusion_matrix}
+\end{figure}
+
+Số liệu cụ thể từ ma trận nhầm lẫn:
+\begin{itemize}
+    \item \textbf{True Negative (TN - Đúng khi không rời bỏ):} 1550 khách hàng.
+    \item \textbf{False Positive (FP - Dự đoán rời bỏ sai):} 43 khách hàng.
+    \item \textbf{False Negative (FN - Dự đoán ở lại sai):} 244 khách hàng.
+    \item \textbf{True Positive (TP - Đúng khi rời bỏ thực tế):} 163 khách hàng.
+\end{itemize}
+
+\noindent Chi tiết báo cáo phân loại (Classification Report) trên tập kiểm thử:
+\begin{table}[H]
+\centering
+\caption{Báo cáo hiệu suất phân loại lớp}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Lớp} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
+\midrule
+Stay (0)  & 0.86 & 0.97 & 0.92 & 1593 \\
+Churn (1) & 0.79 & 0.40 & 0.53 & 407 \\
+\midrule
+\textbf{Accuracy} & \multicolumn{3}{c}{85.65\%} & 2000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Kết luận}
+Mô hình ANN được xây dựng trong bài Lab 4.1 đã chứng minh hiệu quả khả quan trong việc nhận diện khách hàng có xu hướng rời bỏ dịch vụ ngân hàng với độ chính xác đạt trên 85\%. 
+Hệ thống tiền xử lý dữ liệu và cấu hình mạng nơ-ron tuần tự 2 lớp ẩn là một giải pháp cơ bản nhưng hiệu quả cho các bài toán phân loại nhị phân trong các doanh nghiệp thực tế.
+Để cải thiện hiệu năng mô hình hơn nữa trong tương lai, có thể áp dụng các kỹ thuật như điều chỉnh siêu tham số mạng (số lớp ẩn, số nút, học phí), sử dụng kỹ thuật Regularization chống overfitting (Dropout, L2 regularization) hoặc xử lý mất cân bằng mẫu (SMOTE).
+
+\end{document}
