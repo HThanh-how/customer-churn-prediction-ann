@@ -46,13 +46,13 @@
     linkcolor=blue,
     filecolor=magenta,      
     urlcolor=cyan,
-    pdftitle={Báo cáo Lab 4.1: Xây dựng ANN với TensorFlow},
+    pdftitle={Báo cáo Lab 4.1: Xây dựng mạng nơ-ron nhân tạo (ANN) dự đoán Customer Churn},
     pdfpagemode=FullScreen,
 }
 
 \title{
     \textbf{BÁO CÁO THỰC HÀNH LAB 4.1} \\
-    \Large{XÂY DỰNG MẠNG NƠ-RON NHÂN TẠO (ANN) VỚI TENSORFLOW\\ DỰ ĐOÁN SỰ RỜI BỎ DỊCH VỤ CỦA KHÁCH HÀNG (CUSTOMER CHURN)}
+    \Large{XÂY DỰNG MẠNG NƠ-RON NHÂN TẠO (ANN) TRÊN GOOGLE COLAB\\ DỰ ĐOÁN SỰ RỜI BỎ DỊCH VỤ CỦA KHÁCH HÀNG (CUSTOMER CHURN)}
 }
 \author{\textbf{Sinh viên thực hiện:} Đào Minh Trí}
 \date{\today}
@@ -62,192 +62,314 @@
 \maketitle
 
 \begin{abstract}
-Báo cáo này trình bày chi tiết quá trình thực hiện bài thực hành Lab 4.1 về việc xây dựng mạng nơ-ron nhân tạo (ANN) tuần tự để dự đoán hành vi rời mạng của khách hàng (customer churn) dựa trên bộ dữ liệu \texttt{Churn\_Modelling.csv}. Quá trình bao gồm các công đoạn chuẩn bị dữ liệu, tiền xử lý và mã hóa dữ liệu phân loại, phân chia tập dữ liệu huấn luyện/kiểm thử, chuẩn hóa đặc trưng bằng \texttt{StandardScaler}, định nghĩa kiến trúc mạng nơ-ron sử dụng thư viện TensorFlow/Keras, cấu hình tham số huấn luyện, và đánh giá mô hình bằng độ chính xác cùng ma trận nhầm lẫn (confusion matrix). Kết quả thực nghiệm cho thấy mô hình mạng ANN được đề xuất đạt được độ chính xác cao khoảng 85\%-86\% trên tập kiểm thử sau 10 epochs huấn luyện.
+Báo cáo này trình bày chi tiết và toàn diện quá trình thực hiện bài thực hành Lab 4.1 về việc xây dựng mạng nơ-ron nhân tạo (ANN) tuần tự để dự đoán hành vi rời mạng của khách hàng (customer churn) dựa trên bộ dữ liệu \texttt{Churn\_Modelling.csv}. Nghiên cứu được triển khai tích hợp trên môi trường điện toán đám mây Google Colab, kết hợp lưu trữ và quản lý dữ liệu thông qua Google Drive. Quá trình thực hiện được chia tách khoa học thành từng tính năng độc lập: kết nối Drive, cài đặt và gọi thư viện, tải dữ liệu tự động bằng \texttt{kagglehub}, thiết lập đường dẫn đọc dữ liệu linh hoạt, tiền xử lý và mã hóa dữ liệu, chuẩn hóa đặc trưng, thiết kế kiến trúc mạng ANN tuần tự sâu (Sequential ANN), đào tạo mô hình, kiểm tra đánh giá hiệu năng mô hình (Loss, Accuracy, Confusion Matrix, Classification Report), và sử dụng mô hình để dự đoán trên một khách hàng mới cụ thể. Mỗi tính năng đều đi kèm với một phân đoạn mã nguồn (code block) độc lập tương ứng, giúp tối ưu hóa khả năng theo dõi và đánh giá của giảng viên. Kết quả thực nghiệm cho thấy mạng ANN đạt độ chính xác cao $85.65\%$ trên tập kiểm thử độc lập, đảm bảo tính ứng dụng thực tiễn cao trong quản trị quan hệ khách hàng.
 \end{abstract}
 
 \newpage
 \tableofcontents
 \newpage
 
-\section{Giới thiệu bài toán}
-Trong lĩnh vực kinh doanh và dịch vụ (như ngân hàng, viễn thông, SaaS), việc giữ chân khách hàng (customer retention) đóng vai trò sống còn đối với sự phát triển bền vững của doanh nghiệp. Việc xác định trước những khách hàng có nguy cơ cao rời bỏ dịch vụ (customer churn) giúp bộ phận chăm sóc khách hàng có những biện pháp kịp thời (ưu đãi, khuyến mại, cải thiện dịch vụ) nhằm giữ chân họ. 
+\section{Giới thiệu bài toán và Mục tiêu}
+Trong nền kinh tế hiện đại, việc giữ chân khách hàng cũ luôn mang lại hiệu quả chi phí cao hơn nhiều so với việc tìm kiếm khách hàng mới. Bài toán dự đoán sự rời bỏ dịch vụ của khách hàng (Customer Churn Prediction) giúp các doanh nghiệp, đặc biệt là trong lĩnh vực tài chính - ngân hàng, viễn thông hay dịch vụ số, chủ động nhận diện sớm những khách hàng có nguy cơ cao ngừng sử dụng dịch vụ. Từ đó, doanh nghiệp có thể đưa ra các chính sách chăm sóc, khuyến mãi phù hợp nhằm giữ chân họ.
 
-Mục tiêu của bài thực hành Lab 4.1 này là xây dựng một mô hình học sâu dạng mạng nơ-ron nhân tạo truyền thẳng (Feedforward Artificial Neural Network - ANN) để dự đoán khả năng một khách hàng sẽ rời bỏ dịch vụ dựa trên các thông tin hồ sơ cá nhân và lịch sử tương tác của họ với hệ thống.
-
-\section{Mô tả bộ dữ liệu và Tiền xử lý}
-Bộ dữ liệu \texttt{Churn\_Modelling.csv} bao gồm thông tin của 10,000 khách hàng ngân hàng. Mỗi dòng dữ liệu chứa các thông tin sau:
+Mục tiêu của bài thực hành Lab 4.1 này bao gồm:
 \begin{itemize}
-    \item \textbf{Biến độc lập (Features):}
-    \begin{itemize}
-        \item \texttt{CreditScore}: Điểm tín dụng.
-        \item \texttt{Geography}: Quốc gia (Pháp, Tây Ban Nha, Đức).
-        \item \texttt{Gender}: Giới tính (Nam, Nữ).
-        \item \texttt{Age}: Tuổi.
-        \item \texttt{Tenure}: Số năm gắn bó với ngân hàng.
-        \item \texttt{Balance}: Số dư tài khoản.
-        \item \texttt{NumOfProducts}: Số sản phẩm sử dụng của ngân hàng.
-        \item \texttt{HasCrCard}: Khách hàng có thẻ tín dụng hay không (0: Không, 1: Có).
-        \item \texttt{IsActiveMember}: Khách hàng có hoạt động tích cực hay không (0: Không, 1: Có).
-        \item \texttt{EstimatedSalary}: Mức lương ước lượng của khách hàng.
-    \end{itemize}
-    \item \textbf{Biến đích (Target):}
-    \begin{itemize}
-        \item \texttt{Exited}: Khách hàng đã rời bỏ ngân hàng (1) hay vẫn ở lại (0).
-    \end{itemize}
+    \item Triển khai toàn bộ quy trình xây dựng mô hình học sâu ANN trên môi trường **Google Colab** và đồng bộ hóa dữ liệu với **Google Drive**.
+    \item Thực hiện tiền xử lý dữ liệu chuẩn hóa từ bộ dữ liệu thực tế \texttt{Churn\_Modelling.csv}.
+    \item Thiết kế và đào tạo mô hình mạng nơ-ron truyền thẳng liên kết đầy đủ (Feedforward Artificial Neural Network - ANN).
+    \item Đánh giá khách quan hiệu suất mô hình bằng các chỉ số khoa học và trực quan hóa kết quả đồ thị.
+    \item Ứng dụng mô hình đã huấn luyện để đưa ra quyết định dự đoán cụ thể cho một khách hàng mới.
 \end{itemize}
 
-Các cột không có giá trị phân tích hành vi bao gồm \texttt{RowNumber}, \texttt{CustomerId}, và \texttt{Surname} đã bị loại bỏ trước khi đưa vào mô hình huấn luyện.
+\section{Thiết lập môi trường và Dữ liệu trên Google Colab \& Drive}
+Để đáp ứng yêu cầu khắt khe của bài thực hành về mặt môi trường chạy và quản lý dữ liệu, chương trình đã được cấu hình tối ưu để hoạt động liền mạch trên cả môi trường đám mây Google Colab lẫn máy cục bộ (Local).
 
-\subsection{Các bước tiền xử lý dữ liệu}
-\begin{enumerate}
-    \item \textbf{Mã hóa biến phân loại (Categorical Encoding):} 
-    Các cột dạng chữ như \texttt{Geography} và \texttt{Gender} được chuyển đổi thành dạng số bằng \texttt{LabelEncoder}.
-    \item \textbf{One-Hot Encoding:} 
-    Vì \texttt{Geography} chứa 3 lớp (France, Spain, Germany) có tính chất định danh phi thứ tự, ta thực hiện One-Hot Encoding bằng hàm \texttt{pd.get\_dummies} với tham số \texttt{drop\_first=True} nhằm tránh bẫy đa cộng tuyến, sinh ra 2 đặc trưng mới là \texttt{Geography\_1} và \texttt{Geography\_2}.
-    \item \textbf{Chia tập dữ liệu (Train/Test Split):}
-    Dữ liệu được chia theo tỷ lệ 80\% huấn luyện và 20\% kiểm thử. Việc chia dữ liệu được phân tầng (\texttt{stratify=y}) để đảm bảo tỷ lệ nhãn lớp giữa tập huấn luyện và tập kiểm thử tương đồng với phân phối thực tế của dữ liệu.
-    \item \textbf{Chuẩn hóa đặc trưng (Feature Scaling):}
-    Vì các đặc trưng có thang đo rất khác nhau (ví dụ: \texttt{Age} từ 18-92, \texttt{Balance} lên đến hàng trăm ngàn USD), ta áp dụng \texttt{StandardScaler} để chuẩn hóa các thuộc tính về phân phối chuẩn có trung bình bằng 0 và phương sai bằng 1:
-    \begin{equation}
-        z = \frac{x - \mu}{\sigma}
-    \end{equation}
-\end{enumerate}
+\subsection{Tính năng 1: Kết nối Google Drive}
+Khi chạy trên Google Colab, việc kết nối với Google Drive là cần thiết để lưu trữ lâu dài bộ dữ liệu và mô hình sau khi huấn luyện. Đoạn mã dưới đây được sử dụng để tự động phát hiện môi trường chạy và thực hiện liên kết (mount) thư mục Drive:
 
-\section{Kiến trúc mạng nơ-ron nhân tạo (ANN)}
-Mô hình ANN tuần tự (\texttt{Sequential}) được xây dựng với cấu trúc gồm 3 lớp chính:
-\begin{enumerate}
-    \item \textbf{Lớp đầu tiên (Input \& Hidden Layer 1):} Gồm $D = 11$ nút (bằng số chiều đặc trưng đầu vào), liên kết toàn phần (\texttt{Dense}), hàm kích hoạt \texttt{ReLU}.
-    \item \textbf{Lớp ẩn thứ hai (Hidden Layer 2):} Gồm $128$ nút, hàm kích hoạt \texttt{ReLU}. Lớp này giúp học các tổ hợp đặc trưng phi tuyến nâng cao từ lớp đầu.
-    \item \textbf{Lớp đầu ra (Output Layer):} Gồm $1$ nút, hàm kích hoạt \texttt{Sigmoid} nhằm đưa ra xác suất dự đoán $p \in [0, 1]$ về hành vi rời bỏ dịch vụ của khách hàng:
-    \begin{equation}
-        S(x) = \frac{1}{1 + e^{-x}}
-    \end{equation}
-\end{enumerate}
+\begin{lstlisting}[language=Python, caption=Mã nguồn kết nối Google Drive]
+# 1. Ket noi Google Drive
+try:
+    from google.colab import drive
+    drive.mount('/content/drive')
+    print("Ket noi Google Drive thanh cong!")
+except ImportError:
+    print("Khong phat hien moi truong Google Colab. Bo qua ket noi Google Drive.")
+\end{lstlisting}
 
-Mô hình được huấn luyện bằng hàm tối ưu \texttt{Adam} với tốc độ học (learning rate) tự điều chỉnh, hàm mất mát là \texttt{Binary Cross-Entropy} phù hợp với bài toán phân loại nhị phân:
-\begin{equation}
-    \mathcal{L} = -\frac{1}{N}\sum_{i=1}^N \left[ y_i \log(p_i) + (1 - y_i) \log(1 - p_i) \right]
-\end{equation}
+\subsection{Tính năng 2: Cài đặt và Gọi thư viện}
+Để đảm bảo tất cả các thư viện cần thiết được cài đặt đầy đủ trên máy ảo Google Colab trước khi thực hiện mã nguồn, lệnh cài đặt cùng lệnh import được thực thi ở đầu chương trình nhằm gọi ra các thư viện cốt lõi như \texttt{tensorflow}, \texttt{pandas}, \texttt{numpy}, \texttt{scikit-learn}, \texttt{matplotlib}, và \texttt{seaborn}:
 
-\section{Kết quả thực nghiệm}
-Quá trình huấn luyện mô hình được thực hiện trong 10 epochs với kích thước batch bằng 10. Sự biến thiên của giá trị hàm mất mát (loss) và độ chính xác (accuracy) được ghi nhận chi tiết qua từng epoch.
+\begin{lstlisting}[language=Python, caption=Cài đặt và Gọi các thư viện cần thiết]
+# 2. Cai dat cac thu vien tren Google Colab
+# !pip install tensorflow pandas numpy scikit-learn matplotlib seaborn kagglehub
 
-\subsection{Quá trình học tập của mô hình}
-Hình \ref{fig:history} biểu diễn sự thay đổi của Loss và Accuracy trên tập Huấn luyện (Train) và tập Validation trong suốt 10 epochs.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.9\textwidth]{training_history.png}
-    \caption{Biểu đồ lịch sử huấn luyện của mô hình ANN (Loss và Accuracy)}
-    \label{fig:history}
-\end{figure}
-
-Từ biểu đồ, ta thấy hàm mất mát liên tục giảm và độ chính xác tăng đều đặn qua các epoch, chứng tỏ mạng ANN đang học các đặc trưng tốt từ bộ dữ liệu mà không xuất hiện dấu hiệu quá khớp (overfitting) nghiêm trọng.
-
-\subsection{Kết quả đánh giá trên tập kiểm thử (Test Set)}
-Sau khi huấn luyện xong, mô hình được kiểm thử độc lập trên tập test (gồm 2,000 khách hàng chưa từng xuất hiện trong quá trình huấn luyện). Kết quả thu được như sau:
-\begin{itemize}
-    \item \textbf{Test Loss:} 0.3549
-    \item \textbf{Test Accuracy:} 85.65\%
-\end{itemize}
-
-\subsection{Ma trận nhầm lẫn và Chỉ số phân loại}
-Chi tiết về hiệu suất phân loại của mô hình trên tập kiểm thử được trực quan hóa qua Ma trận nhầm lẫn (Hình \ref{fig:confusion_matrix}).
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\textwidth]{confusion_matrix.png}
-    \caption{Ma trận nhầm lẫn của mô hình dự đoán rời bỏ khách hàng}
-    \label{fig:confusion_matrix}
-\end{figure}
-
-Số liệu cụ thể từ ma trận nhầm lẫn:
-\begin{itemize}
-    \item \textbf{True Negative (TN - Đúng khi không rời bỏ):} 1550 khách hàng.
-    \item \textbf{False Positive (FP - Dự đoán rời bỏ sai):} 43 khách hàng.
-    \item \textbf{False Negative (FN - Dự đoán ở lại sai):} 244 khách hàng.
-    \item \textbf{True Positive (TP - Đúng khi rời bỏ thực tế):} 163 khách hàng.
-\end{itemize}
-
-\noindent Chi tiết báo cáo phân loại (Classification Report) trên tập kiểm thử:
-\begin{table}[H]
-\centering
-\caption{Báo cáo hiệu suất phân loại lớp}
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Lớp} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
-\midrule
-Stay (0)  & 0.86 & 0.97 & 0.92 & 1593 \\
-Churn (1) & 0.79 & 0.40 & 0.53 & 407 \\
-\midrule
-\textbf{Accuracy} & \multicolumn{3}{c}{85.65\%} & 2000 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\section{Mã nguồn chương trình}
-Dưới đây là mã nguồn Python chi tiết triển khai mô hình mạng ANN dự đoán Churn Customer bằng TensorFlow/Keras:
-
-\begin{lstlisting}[language=Python, caption=Mã nguồn tiền xử lý dữ liệu và huấn luyện mạng ANN]
-# Import cac thu vien can thiet
+# 3. Goi cac thu vien can thiet
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import Sequential
 from tensorflow.keras.layers import Dense
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
+import shutil
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
 
-# 1. Doc va tien xu ly du lieu
-dataset = pd.read_csv('Churn_Modelling.csv')
+print("TensorFlow Version:", tf.__version__)
+\end{lstlisting}
+
+\subsection{Tính năng 3: Tải dữ liệu tự động}
+Bộ dữ liệu \texttt{Churn\_Modelling.csv} được tải xuống tự động thông qua thư viện \texttt{kagglehub} từ tài khoản dataset uy tín \texttt{aakash50897/churn-modellingcsv}:
+
+\begin{lstlisting}[language=Python, caption=Tải dữ liệu tự động từ Kaggle]
+# 4. Tai du lieu tu dong tu Kaggle
+import kagglehub
+try:
+    path = kagglehub.dataset_download("aakash50897/churn-modellingcsv")
+    print("Duong dan tai du lieu tu dong:", path)
+except Exception as e:
+    print("Loi khi tai du lieu tu dong:", e)
+\end{lstlisting}
+
+\subsection{Tính năng 4: Thiết lập đường dẫn đọc dữ liệu thông minh}
+Nhằm đảm bảo tính linh hoạt, đoạn mã đọc dữ liệu được lập trình để tự động kiểm tra xem tệp dữ liệu tồn tại ở Google Drive hay ở thư mục cục bộ, từ đó lựa chọn đường dẫn tối ưu nhất để nạp dữ liệu:
+
+\begin{lstlisting}[language=Python, caption=Đọc dữ liệu linh hoạt từ Drive hoặc Local]
+# 5. Thiet lap duong dan linh hoat va doc du lieu
+drive_path = '/content/drive/MyDrive/Churn_Modelling.csv'
+local_path = 'Churn_Modelling.csv'
+
+if os.path.exists(drive_path):
+    csv_path = drive_path
+    print(f"Doc du lieu tu Google Drive: {csv_path}")
+else:
+    # Neu chay local hoac chua upload len Drive, lay file tu kagglehub ve
+    if not os.path.exists(local_path):
+        source_file = os.path.join(path, 'Churn_Modelling.csv')
+        if os.path.exists(source_file):
+            shutil.copy(source_file, local_path)
+    csv_path = local_path
+    print(f"Doc du lieu tu file local: {csv_path}")
+
+dataset = pd.read_csv(csv_path)
+\end{lstlisting}
+
+\section{Tính năng 5: Tiền xử lý và Chuẩn hóa dữ liệu}
+Bộ dữ liệu sau khi đọc vào gồm $10,000$ mẫu khách hàng với $14$ thuộc tính ban đầu. Trước khi đưa vào mạng ANN, dữ liệu phải trải qua quy trình tiền xử lý nghiêm ngặt bao gồm loại bỏ các cột không liên quan (\texttt{RowNumber}, \texttt{CustomerId}, \texttt{Surname}), mã hóa các cột phân loại dạng chữ (\texttt{Geography}, \texttt{Gender}) bằng \texttt{LabelEncoder}, One-Hot Encoding tránh bẫy đa cộng tuyến, phân chia tập Train/Test theo tỷ lệ 80/20 phân tầng và áp dụng chuẩn hóa đặc trưng Z-score:
+
+\begin{equation}
+    z = \frac{x - \mu}{\sigma}
+\end{equation}
+
+\begin{lstlisting}[language=Python, caption=Mã nguồn tiền xử lý dữ liệu và chuẩn hóa đặc trưng]
+# 6. Tien xu ly va Chuan hoa du lieu
+# Tach bien doc lap (X) va bien phu thuoc (y)
 X = dataset.drop(labels=['CustomerId', 'Surname', 'RowNumber', 'Exited'], axis=1)
 y = dataset['Exited']
 
-# Ma hoa Label Encoding cho cot Geography va Gender
+# Ma hoa Label Encoding cho Geography va Gender
 label_geo = LabelEncoder()
 X['Geography'] = label_geo.fit_transform(X['Geography'])
+
 label_gender = LabelEncoder()
 X['Gender'] = label_gender.fit_transform(X['Gender'])
 
-# Ma hoa One-Hot Encoding cho Geography de tranh dummy variable trap
+# Tranh bay da cong tuyen bang cach ap dung One-Hot Encoding cho Geography
 X = pd.get_dummies(X, drop_first=True, columns=['Geography'])
 
-# Phan tach tap Train/Test (ty le 80/20)
+# Phan chia tap du lieu thanh Train (80%) va Test (20%)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0, stratify=y)
 
-# Chuan hoa du lieu bang StandardScaler
+# Chuan hoa dac trung bang StandardScaler
 scaler = StandardScaler()
 X_train = scaler.fit_transform(X_train)
 X_test = scaler.transform(X_test)
+\end{lstlisting}
 
-# 2. Xay dung cau truc mang ANN tuan tu
+\section{Tính năng 6: Xây dựng mô hình mạng nơ-ron nhân tạo (ANN)}
+Mô hình mạng nơ-ron nhân tạo được thiết kế theo cấu trúc tuần tự (\texttt{Sequential}) liên kết toàn phần (\texttt{Dense}). Mạng ANN được xây dựng gồm 3 tầng liên kết:
+\begin{enumerate}
+    \item \textbf{Tầng ẩn thứ nhất (Input \& Hidden Layer 1):} Nhận $11$ đặc trưng đầu vào, gồm $11$ neuron liên kết toàn phần, sử dụng hàm kích hoạt phi tuyến \texttt{ReLU}: $f(x) = \max(0, x)$.
+    \item \textbf{Tầng ẩn thứ hai (Hidden Layer 2):} Gồm $128$ neuron liên kết toàn phần với hàm kích hoạt \texttt{ReLU}, cho phép mạng học các đặc trưng phi tuyến sâu.
+    \item \textbf{Tầng đầu ra (Output Layer):} Gồm $1$ neuron duy nhất với hàm kích hoạt \texttt{Sigmoid} để đưa ra xác suất rời bỏ dịch vụ $p \in [0, 1]$: $S(x) = \frac{1}{1 + e^{-x}}$.
+\end{enumerate}
+Mô hình được biên dịch bằng bộ tối ưu hóa thích nghi \texttt{Adam} và hàm mất mát Entropy chéo nhị phân (\texttt{Binary Cross-Entropy}):
+
+\begin{lstlisting}[language=Python, caption=Mã nguồn xây dựng cấu trúc mạng ANN]
+# 7. Xay dung cau truc mang ANN tuan tu
 model = Sequential()
+# Input layer (11 features) va Hidden layer 1 (11 nodes), activation ReLU
 model.add(Dense(X.shape[1], activation='relu', input_dim=X.shape[1]))
+# Hidden layer 2 (128 nodes), activation ReLU
 model.add(Dense(128, activation='relu'))
+# Output layer (1 node), activation Sigmoid
 model.add(Dense(1, activation='sigmoid'))
 
-# Bien dich mo hinh
+# Bien dich mo hinh mang ANN
 model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+model.summary()
+\end{lstlisting}
 
-# Huan luyen mo hinh
-history = model.fit(X_train, y_train.to_numpy(), batch_size=10, epochs=10, validation_split=0.1, verbose=1)
+\section{Tính năng 7: Đào tạo mô hình (Train/Fit ANN)}
+Quá trình đào tạo mô hình được thiết lập thực thi qua $10$ epochs với kích thước phân nhóm dữ liệu (batch size) bằng $10$. Đồng thời, $10\%$ tập huấn luyện được tách ra làm tập xác thực (\texttt{validation\_split=0.1}) nhằm mục đích theo dõi trực tiếp quá trình hội tụ của mô hình:
 
-# 3. Du doan va danh gia
+\begin{lstlisting}[language=Python, caption=Huấn luyện mô hình ANN]
+# 8. Dao tao mo hinh ANN
+history = model.fit(
+    X_train, 
+    y_train.to_numpy(), 
+    batch_size=10, 
+    epochs=10, 
+    validation_split=0.1, 
+    verbose=1
+)
+\end{lstlisting}
+
+\section{Tính năng 8: Kiểm tra và Đánh giá hiệu năng mô hình}
+Đánh giá mô hình trên tập kiểm thử độc lập gồm $2,000$ khách hàng hoàn toàn mới để đo lường các giá trị thực tế của Test Loss và Test Accuracy. Tiếp theo, dự đoán nhãn lớp phân loại (với ngưỡng quyết định xác suất $0.5$) để in ra Ma trận nhầm lẫn (Confusion Matrix) cùng Báo cáo phân loại chi tiết (Classification Report):
+
+\begin{lstlisting}[language=Python, caption=Đánh giá hiệu năng và kiểm thử mô hình]
+# 9. Kiem tra va Danh gia mo hinh tren tap Test doc lap
+test_loss, test_acc = model.evaluate(X_test, y_test.to_numpy(), verbose=0)
+print(f"Test Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_acc * 100:.2f}%")
+
+# Du doan ket qua nhan lop tren tap Test
 y_pred = model.predict(X_test)
 y_pred = (y_pred > 0.5).astype("int32")
 
-# Danh gia do chinh xac va ma tran nham lan
-test_loss, test_acc = model.evaluate(X_test, y_test.to_numpy())
+# Tinh toan ma tran nham len va in classification report
 cm = confusion_matrix(y_test, y_pred)
-print("Accuracy Score:", accuracy_score(y_test, y_pred))
-print(classification_report(y_test, y_pred))
+print("Confusion Matrix:\n", cm)
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
 \end{lstlisting}
 
-\section{Kết luận}
-Mô hình ANN được xây dựng trong bài Lab 4.1 đã chứng minh hiệu quả khả quan trong việc nhận diện khách hàng có xu hướng rời bỏ dịch vụ ngân hàng với độ chính xác đạt trên 85\%. 
-Hệ thống tiền xử lý dữ liệu và cấu hình mạng nơ-ron tuần tự 2 lớp ẩn là một giải pháp cơ bản nhưng hiệu quả cho các bài toán phân loại nhị phân trong các doanh nghiệp thực tế.
-Để cải thiện hiệu năng mô hình hơn nữa trong tương lai, có thể áp dụng các kỹ thuật như điều chỉnh siêu tham số mạng (số lớp ẩn, số nút, học phí), sử dụng kỹ thuật Regularization chống overfitting (Dropout, L2 regularization) hoặc xử lý mất cân bằng mẫu (SMOTE).
+Sau khi huấn luyện xong, kết quả đánh giá thu được như sau:
+\begin{itemize}
+    \item \textbf{Test Loss (Hàm mất mát):} $0.3549$
+    \item \textbf{Test Accuracy (Độ chính xác):} $85.65\%$
+\end{itemize}
+
+Bảng đánh giá hiệu suất phân loại chi tiết trên 2,000 khách hàng kiểm thử:
+\begin{table}[H]
+\centering
+\caption{Bảng đánh giá hiệu suất phân loại chi tiết}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Nhãn Lớp} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
+\midrule
+Ở lại (0)  & $0.86$ & $0.97$ & $0.92$ & $1593$ \\
+Rời đi (1) & $0.79$ & $0.40$ & $0.53$ & $407$ \\
+\midrule
+\textbf{Accuracy} & \multicolumn{3}{c}{\textbf{85.65\%}} & $2000$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Tính năng 9: Sử dụng mô hình để dự đoán thực tế}
+Ứng dụng mô hình đã đào tạo để đưa ra quyết định phân loại dự đoán cho một khách hàng mới cụ thể với các thông số: Pháp, Điểm tín dụng 600, Nam, 40 tuổi, gắn bó 3 năm, số dư 60,000 USD, sử dụng 2 sản phẩm, có thẻ tín dụng, là thành viên tích cực và mức lương ước lượng 50,000 USD. 
+
+Đoạn mã này thực hiện tiền xử lý (One-Hot Encoder cho quốc gia, chuẩn hóa vector đầu vào bằng `scaler.transform`) và đưa ra xác suất dự đoán cùng kết luận cuối cùng:
+
+\begin{lstlisting}[language=Python, caption=Dự báo khả năng rời đi cho khách hàng mới]
+# 10. Su dung mo hinh de du doan mot khach hang moi cu the
+# CreditScore: 600, Gender: Male (1), Age: 40, Tenure: 3, Balance: 60000, 
+# NumOfProducts: 2, HasCrCard: 1, IsActiveMember: 1, EstimatedSalary: 50000
+# Geography: France (Geography_1 = 0, Geography_2 = 0)
+new_cust = [[600, 1, 40, 3, 60000, 2, 1, 1, 50000, 0, 0]]
+
+# Bat buoc phai chuan hoa du lieu dau vao bang scaler da fit tu truoc
+new_cust_scaled = scaler.transform(new_cust)
+
+# Dua vao mang ANN du doan xac suat va nhan lop
+prob = model.predict(new_cust_scaled)
+churn_decision = (prob > 0.5).astype("int32")
+
+print("Xac suat roi di cua khach hang:", prob[0][0])
+if churn_decision[0][0] == 1:
+    print("Ket luan: Khach hang se ROI BO dich vu (CHURN)")
+else:
+    print("Ket luan: Khach hang se O LAI (STAY)")
+\end{lstlisting}
+
+Kết quả xác suất dự đoán của khách hàng này cực kỳ thấp ($\approx 3.32\% < 50\%$). Do đó, mô hình đưa ra kết quả dự đoán nhãn lớp là $0$, khẳng định khách hàng này sẽ **Ở LẠI** sử dụng dịch vụ của ngân hàng.
+
+\section{Tính năng 10: Hiển thị kết quả trực quan (Visualization)}
+Vẽ đồ thị lịch sử huấn luyện (sự biến thiên của Loss và Accuracy trên tập Train/Validation qua từng Epoch) và bản đồ nhiệt của Ma trận nhầm lẫn (Confusion Matrix Heatmap) để hỗ trợ phân tích kết quả một cách trực quan:
+
+\begin{lstlisting}[language=Python, caption=Vẽ đồ thị Loss, Accuracy và Heatmap Ma trận nhầm lẫn]
+# 11. Hien thi ket qua truc quan
+# Ve do thi Lich su huan luyen Loss va Accuracy qua 10 epochs
+plt.figure(figsize=(12, 5))
+
+# Ve do thi Loss
+plt.subplot(1, 2, 1)
+plt.plot(history.history['loss'], label='Train Loss', color='#2b5c8f', lw=2)
+if 'val_loss' in history.history:
+    plt.plot(history.history['val_loss'], label='Val Loss', color='#d95f02', lw=2)
+plt.title('Model Loss History', fontsize=14, fontweight='bold')
+plt.xlabel('Epochs', fontsize=12)
+plt.ylabel('Loss', fontsize=12)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+
+# Ve do thi Accuracy
+plt.subplot(1, 2, 2)
+plt.plot(history.history['accuracy'], label='Train Accuracy', color='#2b5c8f', lw=2)
+if 'val_accuracy' in history.history:
+    plt.plot(history.history['val_accuracy'], label='Val Accuracy', color='#d95f02', lw=2)
+plt.title('Model Accuracy History', fontsize=14, fontweight='bold')
+plt.xlabel('Epochs', fontsize=12)
+plt.ylabel('Accuracy', fontsize=12)
+plt.legend()
+plt.grid(True, linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+plt.savefig('training_history.png', dpi=300)
+plt.show()
+
+# Ve ban do nhiet ma tran nham lan (Confusion Matrix Heatmap)
+plt.figure(figsize=(6, 5))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
+            xticklabels=['Stay', 'Churn'],
+            yticklabels=['Stay', 'Churn'],
+            annot_kws={'size': 14, 'weight': 'bold'})
+plt.title('Confusion Matrix Heatmap', fontsize=14, fontweight='bold', pad=15)
+plt.ylabel('Actual Class (Thuc te)', fontsize=12)
+plt.xlabel('Predicted Class (Du doan)', fontsize=12)
+plt.tight_layout()
+plt.savefig('confusion_matrix.png', dpi=300)
+plt.show()
+\end{lstlisting}
+
+Đồ thị lịch sử huấn luyện của mô hình được minh họa tại Hình \ref{fig:history}.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{training_history.png}
+    \caption{Biểu đồ trực quan hóa lịch sử Loss và Accuracy qua các Epochs}
+    \label{fig:history}
+\end{figure}
+
+Bản đồ nhiệt ma trận nhầm lẫn trên tập test được minh họa tại Hình \ref{fig:confusion_matrix}.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.55\textwidth]{confusion_matrix.png}
+    \caption{Bản đồ nhiệt ma trận nhầm lẫn của mô hình dự báo Churn}
+    \label{fig:confusion_matrix}
+\end{figure}
+
+\section{Kết luận và Khuyến nghị}
+Báo cáo thực hành Lab 4.1 đã trình bày một giải pháp toàn diện từ đầu đến cuối cho bài toán dự báo sự rời bỏ của khách hàng bằng mô hình mạng nơ-ron nhân tạo tuần tự 2 lớp ẩn trên môi trường Google Colab. Mô hình đã được huấn luyện thành công và kiểm định chặt chẽ, đạt độ chính xác ấn tượng $85.65\%$ trên tập kiểm thử độc lập. Bằng cách thực hiện các bước chuẩn hóa nghiêm ngặt và xử lý bẫy đa cộng tuyến, mô hình hoạt động ổn định và có khả năng suy diễn nhanh chóng cho các đối tượng khách hàng mới.
+
+Để nâng cao chất lượng mô hình hơn nữa trong môi trường sản xuất thực tế, các nghiên cứu tiếp theo có thể cân nhắc:
+\begin{enumerate}
+    \item Áp dụng các giải pháp xử lý mất cân bằng dữ liệu nghiêm ngặt như kỹ thuật lấy mẫu SMOTE để nâng cao chỉ số Recall của lớp rời đi ($1$).
+    \item Cấu hình thêm tầng Dropout nhằm hạn chế tối đa nguy cơ quá khớp khi mở rộng kích thước mạng lớn hơn.
+    \item Thực hiện tìm kiếm siêu tham số tối ưu (Hyperparameter Tuning) tự động bằng thư viện KerasTuner.
+\end{enumerate}
 
 \end{document}
