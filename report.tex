@@ -1,375 +1,187 @@
-\documentclass[12pt,a4paper]{article}
-\usepackage[utf8]{inputenc}
+% =====================================================================
+%  ĐỒ ÁN MÔN HỌC: DỮ LIỆU LỚN (BIG DATA)
+%  Đề tài: Hệ thống gợi ý sản phẩm Software trên Amazon
+%  Biên dịch bằng XeLaTeX (font Times New Roman)
+% =====================================================================
+\documentclass[12pt,a4paper]{report}
+
+\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{Times New Roman}[
+    Ligatures=TeX,
+    Renderer=Basic,
+]
+\XeTeXgenerateactualtext=1
+
 \usepackage[vietnamese]{babel}
-\usepackage{amsmath}
-\usepackage{amsfonts}
-\usepackage{amssymb}
+\usepackage{xcolor}
+\definecolor{textcolor}{RGB}{0,0,0}
 \usepackage{graphicx}
-\usepackage{booktabs}
+\usepackage{adjustbox}
 \usepackage{float}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{setspace}
+\usepackage{placeins}
+\usepackage{indentfirst}
+\usepackage{enumitem}
+\usepackage{listings}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tocloft}
 \usepackage{geometry}
 \usepackage{hyperref}
-\usepackage{indentfirst}
-\usepackage{xcolor}
-\usepackage{listings}
 
-\definecolor{codegreen}{rgb}{0,0.6,0}
-\definecolor{codegray}{rgb}{0.5,0.5,0.5}
-\definecolor{codepurple}{rgb}{0.58,0,0.82}
-\definecolor{backcolour}{rgb}{0.96,0.96,0.96}
+% ---------------------------------------------------------------------
+% Highlight code (light theme kiểu GitHub)
+% ---------------------------------------------------------------------
+\definecolor{codekeyword}{RGB}{0,82,204}
+\definecolor{codestring}{RGB}{196,26,22}
+\definecolor{codecomment}{RGB}{98,98,98}
+\definecolor{codebg}{RGB}{246,248,251}
+\definecolor{codeborder}{RGB}{208,215,222}
+\definecolor{codeplain}{RGB}{36,41,47}
 
-\lstdefinestyle{mystyle}{
-    backgroundcolor=\color{backcolour},   
-    commentstyle=\color{codegreen},
-    keywordstyle=\color{blue}\bfseries,
-    numberstyle=\tiny\color{codegray},
-    stringstyle=\color{codepurple},
-    basicstyle=\ttfamily\small,
-    breakatwhitespace=false,         
-    breaklines=true,                 
-    captionpos=b,                    
-    keepspaces=true,                 
-    numbers=left,                    
-    numbersep=8pt,                  
-    showspaces=false,                
-    showstringspaces=false,
-    showtabs=false,                  
-    tabsize=4
+\lstdefinestyle{codeLight}{
+  basicstyle=\ttfamily\footnotesize,
+  numbers=left,
+  numberstyle=\tiny\color{codecomment},
+  numbersep=8pt,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  breakatwhitespace=true,
+  postbreak=\mbox{\textcolor{codecomment}{\scriptsize$\hookrightarrow$}\space},
+  tabsize=2,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{codeborder},
+  framesep=6pt,
+  xleftmargin=14pt,
+  framexleftmargin=10pt,
+  keywordstyle=\bfseries\color{codekeyword},
+  commentstyle=\itshape\color{codecomment},
+  stringstyle=\color{codestring},
+  literate=
+    {á}{{\'a}}1 {à}{{\`a}}1 {ả}{{\h{a}}}1 {ã}{{\~a}}1 {ạ}{{\d{a}}}1
+    {ă}{{\u{a}}}1 {â}{{\^a}}1 {đ}{{\dj}}1 {é}{{\'e}}1 {è}{{\`e}}1
+    {ê}{{\^e}}1 {í}{{\'i}}1 {ì}{{\`i}}1 {ó}{{\'o}}1 {ò}{{\`o}}1
+    {ô}{{\^o}}1 {ơ}{{\horn{o}}}1 {ú}{{\'u}}1 {ù}{{\`u}}1 {ư}{{\horn{u}}}1
+    {ý}{{\'y}}1
 }
+\lstset{style=codeLight}
 
-\lstset{style=mystyle}
+% ---------------------------------------------------------------------
+% TikZ cho sơ đồ kiến trúc
+% ---------------------------------------------------------------------
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, calc,
+  decorations.pathreplacing, fit, backgrounds}
+\tikzset{every node/.append style={align=center, inner sep=3pt}}
 
-\geometry{left=2.5cm,right=2.5cm,top=2.5cm,bottom=2.5cm}
+% ---------------------------------------------------------------------
+% Caption: "Hình x.x" và "Bảng x.x" in nghiêng
+% ---------------------------------------------------------------------
+\DeclareCaptionLabelFormat{italiclabel}{\textit{#1~#2}}
+\captionsetup[figure]{labelformat=italiclabel}
+\captionsetup[table]{labelformat=italiclabel}
+
+% ---------------------------------------------------------------------
+% Trang trí & khoảng cách
+% ---------------------------------------------------------------------
+\emergencystretch=2em
+\geometry{left=3cm, right=2cm, top=2cm, bottom=2cm}
+\setstretch{1.15}
+
+\makeatletter
+\renewcommand\normalsize{\@setfontsize\normalsize{13pt}{18pt}}
+\makeatother
+
+\setlength{\parindent}{1.5em}
+\setlength{\parskip}{0pt}
+
+\makeatletter
+\@afterindentfalse
+% Giảm khoảng cách trước chapter heading
+\renewcommand{\@makechapterhead}[1]{%
+  \vspace*{-10pt}%
+  {\parindent \z@ \raggedright \normalfont
+    \ifnum \c@secnumdepth >\m@ne
+        \Large\bfseries \@chapapp\space \thechapter
+        \par\nobreak \vskip 4pt
+    \fi
+    \interlinepenalty\@M
+    \huge \bfseries #1\par\nobreak \vskip 12pt
+  }}
+\renewcommand{\@makeschapterhead}[1]{%
+  \vspace*{-10pt}%
+  {\parindent \z@ \raggedright \normalfont
+    \huge \bfseries #1\par\nobreak \vskip 12pt
+  }}
+\makeatother
 
 \hypersetup{
     colorlinks=true,
-    linkcolor=blue,
-    filecolor=magenta,      
-    urlcolor=cyan,
-    pdftitle={Báo cáo Lab 4.1: Xây dựng mạng nơ-ron nhân tạo (ANN) dự đoán Customer Churn},
-    pdfpagemode=FullScreen,
+    linkcolor=black,
+    citecolor=black,
+    filecolor=magenta,
+    urlcolor=blue,
+    pdftitle={Hệ thống gợi ý sản phẩm Software trên Amazon},
+    pdfauthor={Đào Minh Trí},
 }
 
-\title{
-    \textbf{BÁO CÁO THỰC HÀNH LAB 4.1} \\
-    \Large{XÂY DỰNG MẠNG NƠ-RON NHÂN TẠO (ANN) TRÊN GOOGLE COLAB\\ DỰ ĐOÁN SỰ RỜI BỎ DỊCH VỤ CỦA KHÁCH HÀNG (CUSTOMER CHURN)}
-}
-\author{\textbf{Sinh viên thực hiện:} Đào Minh Trí}
-\date{\today}
+\graphicspath{{images/}}
+
+% Mục lục màu đen
+\renewcommand{\cftfigfont}{\color{black}}
+\renewcommand{\cfttabfont}{\color{black}}
 
 \begin{document}
+\color{textcolor}
+\selectfont
 
-\maketitle
+% =====================================================================
+%  TRANG BÌA
+% =====================================================================
+\input{front_matter/coverpage}
 
-\begin{abstract}
-Báo cáo này trình bày chi tiết và toàn diện quá trình thực hiện bài thực hành Lab 4.1 về việc xây dựng mạng nơ-ron nhân tạo (ANN) tuần tự để dự đoán hành vi rời mạng của khách hàng (customer churn) dựa trên bộ dữ liệu \texttt{Churn\_Modelling.csv}. Nghiên cứu được triển khai tích hợp trên môi trường điện toán đám mây Google Colab, kết hợp lưu trữ và quản lý dữ liệu thông qua Google Drive. Quá trình thực hiện được chia tách khoa học thành từng tính năng độc lập: kết nối Drive, cài đặt và gọi thư viện, tải dữ liệu tự động bằng \texttt{kagglehub}, thiết lập đường dẫn đọc dữ liệu linh hoạt, tiền xử lý và mã hóa dữ liệu, chuẩn hóa đặc trưng, thiết kế kiến trúc mạng ANN tuần tự sâu (Sequential ANN), đào tạo mô hình, kiểm tra đánh giá hiệu năng mô hình (Loss, Accuracy, Confusion Matrix, Classification Report), và sử dụng mô hình để dự đoán trên một khách hàng mới cụ thể. Mỗi tính năng đều đi kèm với một phân đoạn mã nguồn (code block) độc lập tương ứng, giúp tối ưu hóa khả năng theo dõi và đánh giá của giảng viên. Kết quả thực nghiệm cho thấy mạng ANN đạt độ chính xác cao $85.65\%$ trên tập kiểm thử độc lập, đảm bảo tính ứng dụng thực tiễn cao trong quản trị quan hệ khách hàng.
-\end{abstract}
+% =====================================================================
+%  PHẦN ĐẦU (không đánh số trang)
+% =====================================================================
+\pagenumbering{gobble}
+\input{front_matter/acknowledgement}
+\input{front_matter/abstract}
 
-\newpage
+\clearpage
+\renewcommand{\contentsname}{MỤC LỤC}
+\renewcommand{\listfigurename}{DANH SÁCH HÌNH VẼ}
+\renewcommand{\listtablename}{DANH SÁCH BẢNG}
 \tableofcontents
-\newpage
+\clearpage
+\listoffigures
+\clearpage
+\listoftables
+\input{front_matter/abbreviations}
 
-\section{Giới thiệu bài toán và Mục tiêu}
-Trong nền kinh tế hiện đại, việc giữ chân khách hàng cũ luôn mang lại hiệu quả chi phí cao hơn nhiều so với việc tìm kiếm khách hàng mới. Bài toán dự đoán sự rời bỏ dịch vụ của khách hàng (Customer Churn Prediction) giúp các doanh nghiệp, đặc biệt là trong lĩnh vực tài chính - ngân hàng, viễn thông hay dịch vụ số, chủ động nhận diện sớm những khách hàng có nguy cơ cao ngừng sử dụng dịch vụ. Từ đó, doanh nghiệp có thể đưa ra các chính sách chăm sóc, khuyến mãi phù hợp nhằm giữ chân họ.
+% =====================================================================
+%  NỘI DUNG CHÍNH
+% =====================================================================
+\clearpage
+\pagenumbering{arabic}
+\setcounter{page}{1}
 
-Mục tiêu của bài thực hành Lab 4.1 này bao gồm:
-\begin{itemize}
-    \item Triển khai toàn bộ quy trình xây dựng mô hình học sâu ANN trên môi trường **Google Colab** và đồng bộ hóa dữ liệu với **Google Drive**.
-    \item Thực hiện tiền xử lý dữ liệu chuẩn hóa từ bộ dữ liệu thực tế \texttt{Churn\_Modelling.csv}.
-    \item Thiết kế và đào tạo mô hình mạng nơ-ron truyền thẳng liên kết đầy đủ (Feedforward Artificial Neural Network - ANN).
-    \item Đánh giá khách quan hiệu suất mô hình bằng các chỉ số khoa học và trực quan hóa kết quả đồ thị.
-    \item Ứng dụng mô hình đã huấn luyện để đưa ra quyết định dự đoán cụ thể cho một khách hàng mới.
-\end{itemize}
-
-\section{Thiết lập môi trường và Dữ liệu trên Google Colab \& Drive}
-Để đáp ứng yêu cầu khắt khe của bài thực hành về mặt môi trường chạy và quản lý dữ liệu, chương trình đã được cấu hình tối ưu để hoạt động liền mạch trên cả môi trường đám mây Google Colab lẫn máy cục bộ (Local).
-
-\subsection{Tính năng 1: Kết nối Google Drive}
-Khi chạy trên Google Colab, việc kết nối với Google Drive là cần thiết để lưu trữ lâu dài bộ dữ liệu và mô hình sau khi huấn luyện. Đoạn mã dưới đây được sử dụng để tự động phát hiện môi trường chạy và thực hiện liên kết (mount) thư mục Drive:
-
-\begin{lstlisting}[language=Python, caption=Mã nguồn kết nối Google Drive]
-# 1. Ket noi Google Drive
-try:
-    from google.colab import drive
-    drive.mount('/content/drive')
-    print("Ket noi Google Drive thanh cong!")
-except ImportError:
-    print("Khong phat hien moi truong Google Colab. Bo qua ket noi Google Drive.")
-\end{lstlisting}
-
-\subsection{Tính năng 2: Cài đặt và Gọi thư viện}
-Để đảm bảo tất cả các thư viện cần thiết được cài đặt đầy đủ trên máy ảo Google Colab trước khi thực hiện mã nguồn, lệnh cài đặt cùng lệnh import được thực thi ở đầu chương trình nhằm gọi ra các thư viện cốt lõi như \texttt{tensorflow}, \texttt{pandas}, \texttt{numpy}, \texttt{scikit-learn}, \texttt{matplotlib}, và \texttt{seaborn}:
-
-\begin{lstlisting}[language=Python, caption=Cài đặt và Gọi các thư viện cần thiết]
-# 2. Cai dat cac thu vien tren Google Colab
-# !pip install tensorflow pandas numpy scikit-learn matplotlib seaborn kagglehub
-
-# 3. Goi cac thu vien can thiet
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import os
-import shutil
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
-
-print("TensorFlow Version:", tf.__version__)
-\end{lstlisting}
-
-\subsection{Tính năng 3: Tải dữ liệu tự động}
-Bộ dữ liệu \texttt{Churn\_Modelling.csv} được tải xuống tự động thông qua thư viện \texttt{kagglehub} từ tài khoản dataset uy tín \texttt{aakash50897/churn-modellingcsv}:
-
-\begin{lstlisting}[language=Python, caption=Tải dữ liệu tự động từ Kaggle]
-# 4. Tai du lieu tu dong tu Kaggle
-import kagglehub
-try:
-    path = kagglehub.dataset_download("aakash50897/churn-modellingcsv")
-    print("Duong dan tai du lieu tu dong:", path)
-except Exception as e:
-    print("Loi khi tai du lieu tu dong:", e)
-\end{lstlisting}
-
-\subsection{Tính năng 4: Thiết lập đường dẫn đọc dữ liệu thông minh}
-Nhằm đảm bảo tính linh hoạt, đoạn mã đọc dữ liệu được lập trình để tự động kiểm tra xem tệp dữ liệu tồn tại ở Google Drive hay ở thư mục cục bộ, từ đó lựa chọn đường dẫn tối ưu nhất để nạp dữ liệu:
-
-\begin{lstlisting}[language=Python, caption=Đọc dữ liệu linh hoạt từ Drive hoặc Local]
-# 5. Thiet lap duong dan linh hoat va doc du lieu
-drive_path = '/content/drive/MyDrive/Churn_Modelling.csv'
-local_path = 'Churn_Modelling.csv'
-
-if os.path.exists(drive_path):
-    csv_path = drive_path
-    print(f"Doc du lieu tu Google Drive: {csv_path}")
-else:
-    # Neu chay local hoac chua upload len Drive, lay file tu kagglehub ve
-    if not os.path.exists(local_path):
-        source_file = os.path.join(path, 'Churn_Modelling.csv')
-        if os.path.exists(source_file):
-            shutil.copy(source_file, local_path)
-    csv_path = local_path
-    print(f"Doc du lieu tu file local: {csv_path}")
-
-dataset = pd.read_csv(csv_path)
-\end{lstlisting}
-
-\section{Tính năng 5: Tiền xử lý và Chuẩn hóa dữ liệu}
-Bộ dữ liệu sau khi đọc vào gồm $10,000$ mẫu khách hàng với $14$ thuộc tính ban đầu. Trước khi đưa vào mạng ANN, dữ liệu phải trải qua quy trình tiền xử lý nghiêm ngặt bao gồm loại bỏ các cột không liên quan (\texttt{RowNumber}, \texttt{CustomerId}, \texttt{Surname}), mã hóa các cột phân loại dạng chữ (\texttt{Geography}, \texttt{Gender}) bằng \texttt{LabelEncoder}, One-Hot Encoding tránh bẫy đa cộng tuyến, phân chia tập Train/Test theo tỷ lệ 80/20 phân tầng và áp dụng chuẩn hóa đặc trưng Z-score:
-
-\begin{equation}
-    z = \frac{x - \mu}{\sigma}
-\end{equation}
-
-\begin{lstlisting}[language=Python, caption=Mã nguồn tiền xử lý dữ liệu và chuẩn hóa đặc trưng]
-# 6. Tien xu ly va Chuan hoa du lieu
-# Tach bien doc lap (X) va bien phu thuoc (y)
-X = dataset.drop(labels=['CustomerId', 'Surname', 'RowNumber', 'Exited'], axis=1)
-y = dataset['Exited']
-
-# Ma hoa Label Encoding cho Geography va Gender
-label_geo = LabelEncoder()
-X['Geography'] = label_geo.fit_transform(X['Geography'])
-
-label_gender = LabelEncoder()
-X['Gender'] = label_gender.fit_transform(X['Gender'])
-
-# Tranh bay da cong tuyen bang cach ap dung One-Hot Encoding cho Geography
-X = pd.get_dummies(X, drop_first=True, columns=['Geography'])
-
-# Phan chia tap du lieu thanh Train (80%) va Test (20%)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=0, stratify=y)
-
-# Chuan hoa dac trung bang StandardScaler
-scaler = StandardScaler()
-X_train = scaler.fit_transform(X_train)
-X_test = scaler.transform(X_test)
-\end{lstlisting}
-
-\section{Tính năng 6: Xây dựng mô hình mạng nơ-ron nhân tạo (ANN)}
-Mô hình mạng nơ-ron nhân tạo được thiết kế theo cấu trúc tuần tự (\texttt{Sequential}) liên kết toàn phần (\texttt{Dense}). Mạng ANN được xây dựng gồm 3 tầng liên kết:
-\begin{enumerate}
-    \item \textbf{Tầng ẩn thứ nhất (Input \& Hidden Layer 1):} Nhận $11$ đặc trưng đầu vào, gồm $11$ neuron liên kết toàn phần, sử dụng hàm kích hoạt phi tuyến \texttt{ReLU}: $f(x) = \max(0, x)$.
-    \item \textbf{Tầng ẩn thứ hai (Hidden Layer 2):} Gồm $128$ neuron liên kết toàn phần với hàm kích hoạt \texttt{ReLU}, cho phép mạng học các đặc trưng phi tuyến sâu.
-    \item \textbf{Tầng đầu ra (Output Layer):} Gồm $1$ neuron duy nhất với hàm kích hoạt \texttt{Sigmoid} để đưa ra xác suất rời bỏ dịch vụ $p \in [0, 1]$: $S(x) = \frac{1}{1 + e^{-x}}$.
-\end{enumerate}
-Mô hình được biên dịch bằng bộ tối ưu hóa thích nghi \texttt{Adam} và hàm mất mát Entropy chéo nhị phân (\texttt{Binary Cross-Entropy}):
-
-\begin{lstlisting}[language=Python, caption=Mã nguồn xây dựng cấu trúc mạng ANN]
-# 7. Xay dung cau truc mang ANN tuan tu
-model = Sequential()
-# Input layer (11 features) va Hidden layer 1 (11 nodes), activation ReLU
-model.add(Dense(X.shape[1], activation='relu', input_dim=X.shape[1]))
-# Hidden layer 2 (128 nodes), activation ReLU
-model.add(Dense(128, activation='relu'))
-# Output layer (1 node), activation Sigmoid
-model.add(Dense(1, activation='sigmoid'))
-
-# Bien dich mo hinh mang ANN
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-model.summary()
-\end{lstlisting}
-
-\section{Tính năng 7: Đào tạo mô hình (Train/Fit ANN)}
-Quá trình đào tạo mô hình được thiết lập thực thi qua $10$ epochs với kích thước phân nhóm dữ liệu (batch size) bằng $10$. Đồng thời, $10\%$ tập huấn luyện được tách ra làm tập xác thực (\texttt{validation\_split=0.1}) nhằm mục đích theo dõi trực tiếp quá trình hội tụ của mô hình:
-
-\begin{lstlisting}[language=Python, caption=Huấn luyện mô hình ANN]
-# 8. Dao tao mo hinh ANN
-history = model.fit(
-    X_train, 
-    y_train.to_numpy(), 
-    batch_size=10, 
-    epochs=10, 
-    validation_split=0.1, 
-    verbose=1
-)
-\end{lstlisting}
-
-\section{Tính năng 8: Kiểm tra và Đánh giá hiệu năng mô hình}
-Đánh giá mô hình trên tập kiểm thử độc lập gồm $2,000$ khách hàng hoàn toàn mới để đo lường các giá trị thực tế của Test Loss và Test Accuracy. Tiếp theo, dự đoán nhãn lớp phân loại (với ngưỡng quyết định xác suất $0.5$) để in ra Ma trận nhầm lẫn (Confusion Matrix) cùng Báo cáo phân loại chi tiết (Classification Report):
-
-\begin{lstlisting}[language=Python, caption=Đánh giá hiệu năng và kiểm thử mô hình]
-# 9. Kiem tra va Danh gia mo hinh tren tap Test doc lap
-test_loss, test_acc = model.evaluate(X_test, y_test.to_numpy(), verbose=0)
-print(f"Test Loss: {test_loss:.4f}")
-print(f"Test Accuracy: {test_acc * 100:.2f}%")
-
-# Du doan ket qua nhan lop tren tap Test
-y_pred = model.predict(X_test)
-y_pred = (y_pred > 0.5).astype("int32")
-
-# Tinh toan ma tran nham len va in classification report
-cm = confusion_matrix(y_test, y_pred)
-print("Confusion Matrix:\n", cm)
-print("\nClassification Report:\n", classification_report(y_test, y_pred))
-\end{lstlisting}
-
-Sau khi huấn luyện xong, kết quả đánh giá thu được như sau:
-\begin{itemize}
-    \item \textbf{Test Loss (Hàm mất mát):} $0.3549$
-    \item \textbf{Test Accuracy (Độ chính xác):} $85.65\%$
-\end{itemize}
-
-Bảng đánh giá hiệu suất phân loại chi tiết trên 2,000 khách hàng kiểm thử:
-\begin{table}[H]
-\centering
-\caption{Bảng đánh giá hiệu suất phân loại chi tiết}
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Nhãn Lớp} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
-\midrule
-Ở lại (0)  & $0.86$ & $0.97$ & $0.92$ & $1593$ \\
-Rời đi (1) & $0.79$ & $0.40$ & $0.53$ & $407$ \\
-\midrule
-\textbf{Accuracy} & \multicolumn{3}{c}{\textbf{85.65\%}} & $2000$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\section{Tính năng 9: Sử dụng mô hình để dự đoán thực tế}
-Ứng dụng mô hình đã đào tạo để đưa ra quyết định phân loại dự đoán cho một khách hàng mới cụ thể với các thông số: Pháp, Điểm tín dụng 600, Nam, 40 tuổi, gắn bó 3 năm, số dư 60,000 USD, sử dụng 2 sản phẩm, có thẻ tín dụng, là thành viên tích cực và mức lương ước lượng 50,000 USD. 
-
-Đoạn mã này thực hiện tiền xử lý (One-Hot Encoder cho quốc gia, chuẩn hóa vector đầu vào bằng `scaler.transform`) và đưa ra xác suất dự đoán cùng kết luận cuối cùng:
-
-\begin{lstlisting}[language=Python, caption=Dự báo khả năng rời đi cho khách hàng mới]
-# 10. Su dung mo hinh de du doan mot khach hang moi cu the
-# CreditScore: 600, Gender: Male (1), Age: 40, Tenure: 3, Balance: 60000, 
-# NumOfProducts: 2, HasCrCard: 1, IsActiveMember: 1, EstimatedSalary: 50000
-# Geography: France (Geography_1 = 0, Geography_2 = 0)
-new_cust = [[600, 1, 40, 3, 60000, 2, 1, 1, 50000, 0, 0]]
-
-# Bat buoc phai chuan hoa du lieu dau vao bang scaler da fit tu truoc
-new_cust_scaled = scaler.transform(new_cust)
-
-# Dua vao mang ANN du doan xac suat va nhan lop
-prob = model.predict(new_cust_scaled)
-churn_decision = (prob > 0.5).astype("int32")
-
-print("Xac suat roi di cua khach hang:", prob[0][0])
-if churn_decision[0][0] == 1:
-    print("Ket luan: Khach hang se ROI BO dich vu (CHURN)")
-else:
-    print("Ket luan: Khach hang se O LAI (STAY)")
-\end{lstlisting}
-
-Kết quả xác suất dự đoán của khách hàng này cực kỳ thấp ($\approx 3.32\% < 50\%$). Do đó, mô hình đưa ra kết quả dự đoán nhãn lớp là $0$, khẳng định khách hàng này sẽ **Ở LẠI** sử dụng dịch vụ của ngân hàng.
-
-\section{Tính năng 10: Hiển thị kết quả trực quan (Visualization)}
-Vẽ đồ thị lịch sử huấn luyện (sự biến thiên của Loss và Accuracy trên tập Train/Validation qua từng Epoch) và bản đồ nhiệt của Ma trận nhầm lẫn (Confusion Matrix Heatmap) để hỗ trợ phân tích kết quả một cách trực quan:
-
-\begin{lstlisting}[language=Python, caption={Vẽ đồ thị Loss, Accuracy và Heatmap Ma trận nhầm lẫn}]
-# 11. Hien thi ket qua truc quan
-# Ve do thi Lich su huan luyen Loss va Accuracy qua 10 epochs
-plt.figure(figsize=(12, 5))
-
-# Ve do thi Loss
-plt.subplot(1, 2, 1)
-plt.plot(history.history['loss'], label='Train Loss', color='#2b5c8f', lw=2)
-if 'val_loss' in history.history:
-    plt.plot(history.history['val_loss'], label='Val Loss', color='#d95f02', lw=2)
-plt.title('Model Loss History', fontsize=14, fontweight='bold')
-plt.xlabel('Epochs', fontsize=12)
-plt.ylabel('Loss', fontsize=12)
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-
-# Ve do thi Accuracy
-plt.subplot(1, 2, 2)
-plt.plot(history.history['accuracy'], label='Train Accuracy', color='#2b5c8f', lw=2)
-if 'val_accuracy' in history.history:
-    plt.plot(history.history['val_accuracy'], label='Val Accuracy', color='#d95f02', lw=2)
-plt.title('Model Accuracy History', fontsize=14, fontweight='bold')
-plt.xlabel('Epochs', fontsize=12)
-plt.ylabel('Accuracy', fontsize=12)
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-
-plt.tight_layout()
-plt.savefig('training_history.png', dpi=300)
-plt.show()
-
-# Ve ban do nhiet ma tran nham lan (Confusion Matrix Heatmap)
-plt.figure(figsize=(6, 5))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', cbar=False,
-            xticklabels=['Stay', 'Churn'],
-            yticklabels=['Stay', 'Churn'],
-            annot_kws={'size': 14, 'weight': 'bold'})
-plt.title('Confusion Matrix Heatmap', fontsize=14, fontweight='bold', pad=15)
-plt.ylabel('Actual Class (Thuc te)', fontsize=12)
-plt.xlabel('Predicted Class (Du doan)', fontsize=12)
-plt.tight_layout()
-plt.savefig('confusion_matrix.png', dpi=300)
-plt.show()
-\end{lstlisting}
-
-Đồ thị lịch sử huấn luyện của mô hình được minh họa tại Hình \ref{fig:history}.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.95\textwidth]{training_history.png}
-    \caption{Biểu đồ trực quan hóa lịch sử Loss và Accuracy qua các Epochs}
-    \label{fig:history}
-\end{figure}
-
-Bản đồ nhiệt ma trận nhầm lẫn trên tập test được minh họa tại Hình \ref{fig:confusion_matrix}.
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.55\textwidth]{confusion_matrix.png}
-    \caption{Bản đồ nhiệt ma trận nhầm lẫn của mô hình dự báo Churn}
-    \label{fig:confusion_matrix}
-\end{figure}
-
-\section{Kết luận và Khuyến nghị}
-Báo cáo thực hành Lab 4.1 đã trình bày một giải pháp toàn diện từ đầu đến cuối cho bài toán dự báo sự rời bỏ của khách hàng bằng mô hình mạng nơ-ron nhân tạo tuần tự 2 lớp ẩn trên môi trường Google Colab. Mô hình đã được huấn luyện thành công và kiểm định chặt chẽ, đạt độ chính xác ấn tượng $85.65\%$ trên tập kiểm thử độc lập. Bằng cách thực hiện các bước chuẩn hóa nghiêm ngặt và xử lý bẫy đa cộng tuyến, mô hình hoạt động ổn định và có khả năng suy diễn nhanh chóng cho các đối tượng khách hàng mới.
-
-Để nâng cao chất lượng mô hình hơn nữa trong môi trường sản xuất thực tế, các nghiên cứu tiếp theo có thể cân nhắc:
-\begin{enumerate}
-    \item Áp dụng các giải pháp xử lý mất cân bằng dữ liệu nghiêm ngặt như kỹ thuật lấy mẫu SMOTE để nâng cao chỉ số Recall của lớp rời đi ($1$).
-    \item Cấu hình thêm tầng Dropout nhằm hạn chế tối đa nguy cơ quá khớp khi mở rộng kích thước mạng lớn hơn.
-    \item Thực hiện tìm kiếm siêu tham số tối ưu (Hyperparameter Tuning) tự động bằng thư viện KerasTuner.
-\end{enumerate}
+\input{chapters/chapter1_introduction}
+\input{chapters/chapter2_background}
+\input{chapters/chapter3_data}
+\input{chapters/chapter4_methodology}
+\input{chapters/chapter5_experiments}
+\input{chapters/references}
+\input{chapters/appendix}
 
 \end{document}

@@ -1,0 +1,87 @@
+% =====================================================================
+%  CHƯƠNG 5: KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+% =====================================================================
+\chapter{Kết luận và hướng phát triển}
+\label{chap:conclusion}
+
+\section{Kết luận}
+
+Đồ án đã xây dựng thành công một hệ thống gợi ý sản phẩm \textit{Software} trên
+Amazon theo hướng tiếp cận hiện đại, kết hợp mô hình ngôn ngữ và kiến trúc hai tháp.
+Các kết quả chính đạt được bao gồm:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Luồng xử lý dữ liệu lớn ổn định:} hoàn thiện pipeline end-to-end
+    trên Apache Spark, từ nạp dữ liệu thô, làm sạch, ghép nối tới việc dựng văn bản
+    ngữ nghĩa thống nhất và lưu trữ tối ưu bằng định dạng cột Parquet.
+    \item \textbf{Thuật toán trọng số thời gian hiệu quả:} thiết kế cơ chế tổng hợp
+    vector lịch sử người dùng kết hợp độ gần đây và mức độ ưa thích, tính toán hoàn
+    toàn trên bộ nhớ RAM, nhẹ và nhanh.
+    \item \textbf{Mô hình chứng minh năng lực truy hồi:} với hàm mất mát tương phản
+    InfoNCE và bộ mã hóa ngôn ngữ làm tháp sản phẩm, mô hình đạt kết quả vượt trội
+    hơn $24$ lần ở Top-$10$ và hơn $14$ lần ở Top-$50$ so với chọn ngẫu nhiên trên
+    kho hơn $17.000$ sản phẩm, được kiểm chứng bằng giao thức đánh giá full-catalog
+    khắt khe.
+\end{itemize}
+
+Qua đó, đồ án không chỉ giải quyết được hai hạn chế của hệ thống gợi ý truyền thống
+(bỏ qua văn bản ngữ nghĩa và khởi động lạnh) mà còn thể hiện tư duy giải quyết bài
+toán ở quy mô dữ liệu lớn -- đúng tinh thần của môn học.
+
+\section{Hạn chế}
+
+Bên cạnh các kết quả đạt được, hệ thống vẫn còn một số hạn chế:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Tháp sản phẩm bị đóng băng:} do giữ nguyên trọng số của mô hình
+    ngôn ngữ để tiết kiệm bộ nhớ, tháp sản phẩm chưa được \textit{tinh chỉnh sâu}
+    theo tư duy mua sắm thực tế của người dùng trong lĩnh vực công nghệ. Không gian
+    biểu diễn sản phẩm vì thế chưa tối ưu, tạo ra một "trần" hiệu năng.
+    \item \textbf{Chỉ số tuyệt đối còn thấp:} đặc thù của bài toán truy hồi trên kho
+    rất lớn và dữ liệu thưa khiến Recall/NDCG tuyệt đối còn khiêm tốn, dù đã vượt xa
+    baseline.
+    \item \textbf{Chưa khai thác đặc trưng ngữ cảnh:} các yếu tố như mùa vụ, phiên
+    truy cập hay quan hệ sản phẩm đi kèm chưa được tích hợp.
+\end{itemize}
+
+\section{Hướng phát triển}
+
+Từ các hạn chế trên, đồ án đề xuất những hướng phát triển tiếp theo:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Tinh chỉnh tháp sản phẩm bằng kỹ thuật hiệu quả tham số:} khi có
+    phần cứng mạnh hơn, áp dụng các kỹ thuật tinh chỉnh cục bộ như \textbf{LoRA}
+    (Low-Rank Adaptation) để "mở băng" một phần tháp sản phẩm, giúp không gian biểu
+    diễn thích ứng với hành vi người dùng mà vẫn tiết kiệm tài nguyên.
+    \item \textbf{Tích hợp tìm kiếm vector siêu tốc:} sử dụng thư viện
+    \textbf{FAISS} của Facebook để lập chỉ mục toàn bộ vector sản phẩm, cho phép hệ
+    thống trả về gợi ý theo thời gian thực trong vài phần nghìn giây ngay cả với kho
+    hàng triệu sản phẩm.
+    \item \textbf{Mở rộng mô hình hành vi:} bổ sung mô hình hóa chuỗi (sequential)
+    bằng các kiến trúc dựa trên Transformer (SASRec, BERT4Rec) cho tháp người dùng,
+    cùng các tín hiệu ngữ cảnh thời gian thực.
+    \item \textbf{Hệ thống lai và đa mục tiêu:} kết hợp truy hồi hai tháp ở tầng sinh
+    ứng viên với một tầng xếp hạng tinh, đồng thời cân nhắc các tiêu chí đa dạng và
+    độ mới của gợi ý.
+\end{itemize}
+
+\subsection{Phân tích hai hướng nâng cấp trọng tâm}
+
+\textbf{Tinh chỉnh bằng LoRA.} Thay vì cập nhật toàn bộ $\sim 22{,}7$ triệu tham số
+của tháp sản phẩm (tốn kém và dễ "quên" tri thức ngôn ngữ), LoRA \textit{đóng băng}
+trọng số gốc và chèn thêm hai ma trận hạng thấp $A, B$ vào mỗi tầng:
+$W' = W + \Delta W = W + BA$, với $A \in \mathbb{R}^{r \times d}$,
+$B \in \mathbb{R}^{d \times r}$ và hạng $r \ll d$. Chỉ $A, B$ được huấn luyện -- số
+tham số cập nhật giảm hàng trăm lần, cho phép "mở băng" tháp sản phẩm ngay cả trên
+phần cứng hạn chế, giúp không gian biểu diễn thích ứng với hành vi mua sắm thực tế
+mà vẫn giữ tri thức nền.
+
+\textbf{Truy hồi thời gian thực với FAISS.} Ở giai đoạn suy luận, thay vì nhân ma
+trận vét cạn, ta lập chỉ mục toàn bộ vector sản phẩm bằng FAISS. Với kho vừa phải có
+thể dùng chỉ mục phẳng (\texttt{IndexFlatIP}) cho kết quả chính xác tuyệt đối; với
+kho hàng triệu sản phẩm, các chỉ mục xấp xỉ như \texttt{IVF} hoặc \texttt{HNSW} cho
+phép truy vấn Top-$N$ trong vài phần nghìn giây với độ chính xác gần như không suy
+giảm -- đáp ứng yêu cầu thời gian thực của hệ thống sản xuất.
+
+Tóm lại, đồ án đã đặt nền móng vững chắc cho một hệ thống gợi ý dựa trên ngữ nghĩa và
+có khả năng mở rộng, sẵn sàng cho các cải tiến hướng tới môi trường sản xuất thực tế.

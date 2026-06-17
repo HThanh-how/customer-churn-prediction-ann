@@ -1,0 +1,543 @@
+% =====================================================================
+%  CHƯƠNG 3: PHÂN TÍCH VÀ THIẾT KẾ HỆ THỐNG
+% =====================================================================
+\chapter{Phân tích và thiết kế hệ thống}
+\label{chap:design}
+
+\section{Kiến trúc tổng thể}
+
+Hệ thống được thiết kế thành một pipeline gồm bốn giai đoạn nối tiếp, từ dữ liệu thô
+tới danh sách gợi ý (Hình~\ref{fig:pipeline}): (1) tiền xử lý dữ liệu lớn bằng Spark
+và lưu Parquet; (2) mã hóa "trải nghiệm" người dùng và tổng hợp lịch sử có trọng số
+thời gian; (3) huấn luyện mô hình hai tháp với học tương phản; (4) đánh giá truy hồi
+trên toàn bộ kho sản phẩm.
+
+Hình~\ref{fig:pipeline} là sơ đồ khối chi tiết toàn bộ luồng -- từ dữ liệu thô, qua
+xử lý dữ liệu lớn, trích xuất đặc trưng, tới mô hình và đánh giá -- kèm các tệp/đối
+tượng trung gian (Parquet, vector lịch sử) chuyển giao giữa các giai đoạn.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    font=\scriptsize,
+    io/.style={rectangle, rounded corners=2pt, draw=gray!55, fill=gray!12,
+        line width=0.6pt, text width=2.0cm, minimum height=0.65cm, align=center},
+    proc/.style={rectangle, rounded corners=2pt, draw=blue!55, fill=blue!12,
+        line width=0.7pt, text width=6.6cm, minimum height=0.62cm, align=center},
+    art/.style={rectangle, rounded corners=2pt, draw=violet!60, fill=violet!8,
+        line width=0.7pt, text width=6.6cm, minimum height=0.55cm, align=center},
+    mdl/.style={rectangle, rounded corners=2pt, draw=teal!60, fill=teal!10,
+        line width=0.7pt, text width=3.0cm, minimum height=0.78cm, align=center},
+    a/.style={-{Stealth[length=1.8mm]}, line width=0.7pt, gray!65},
+    plab/.style={font=\scriptsize\bfseries, anchor=west}
+]
+% ===== GIAI ĐOẠN 1: XỬ LÝ DỮ LIỆU =====
+\node[io] (rev)   at (-2.6,0) {Reviews\\(JSONL)};
+\node[io] (meta)  at (0,0)    {Metadata\\(JSONL)};
+\node[io] (split) at (2.6,0)  {Split CSV\\train/val/test};
+\node[proc] (spark) at (0,-1.25) {\textbf{Apache Spark:} khử trùng lặp $\cdot$ broadcast join $\cdot$ dựng \texttt{semantic\_text} $\cdot$ \texttt{log1p}};
+\node[art]  (parq)  at (0,-2.35) {\textbf{Parquet:} train / val / test \;+\; item};
+\draw[a] (rev)--(spark); \draw[a] (meta)--(spark); \draw[a] (split)--(spark);
+\draw[a] (spark)--(parq);
+% ===== GIAI ĐOẠN 2: TRÍCH XUẤT ĐẶC TRƯNG =====
+\node[proc, draw=orange!65, fill=orange!12] (enc) at (0,-4.25)
+    {\textbf{Mã hóa trải nghiệm} bằng MiniLM (đóng băng) + mean pooling};
+\node[proc, draw=orange!65, fill=orange!12] (agg) at (0,-5.35)
+    {\textbf{Tổng hợp trọng số thời gian} (recency $\times$ rating)};
+\node[art] (uvec) at (0,-6.45) {\textbf{Vector lịch sử người dùng} (384-d)};
+\draw[a] (parq)--(enc); \draw[a] (enc)--(agg); \draw[a] (agg)--(uvec);
+% ===== GIAI ĐOẠN 3: MÔ HÌNH =====
+\node[mdl] (ut) at (-2.4,-8.7) {Tháp User\\(MLP $384{\to}512{\to}384$)};
+\node[mdl, draw=gray!55, fill=gray!12] (it) at (2.4,-8.7) {Tháp Item\\(MiniLM, đóng băng)};
+\node[mdl, draw=orange!70, fill=orange!14] (loss) at (0,-10.1) {Cosine + InfoNCE\\(in-batch negatives)};
+\draw[a] (uvec)--(ut);
+\draw[a, gray!55] (parq.east) to[out=0,in=90] (it.north);  % van ban item tu Parquet item
+\draw[a] (ut)--(loss); \draw[a, gray!55] (it)--(loss);
+\draw[a, dashed, orange!70] (loss.west) to[out=180,in=-90] node[left, font=\tiny] {cập nhật} (ut.south);
+% ===== GIAI ĐOẠN 4: ĐÁNH GIÁ =====
+\node[mdl, draw=teal!60, fill=teal!12] (metric) at (0,-12.3)
+    {\textbf{Đánh giá full-catalog} ($\sim$17K item): Recall@K, NDCG@K};
+\draw[a, teal!60] (loss)--(metric);
+% ===== BĂNG NỀN CÁC GIAI ĐOẠN =====
+\begin{scope}[on background layer]
+\node[draw=blue!50, rounded corners=4pt, fill=blue!4, line width=0.8pt,
+      fit=(rev)(split)(parq), inner sep=6pt] (b1) {};
+\node[draw=orange!55, rounded corners=4pt, fill=orange!4, line width=0.8pt,
+      fit=(enc)(uvec), inner sep=6pt] (b2) {};
+\node[draw=teal!55, rounded corners=4pt, fill=teal!4, line width=0.8pt,
+      fit=(ut)(it)(loss), inner sep=6pt] (b3) {};
+\node[draw=teal!60, rounded corners=4pt, fill=teal!7, line width=0.8pt,
+      fit=(metric), inner sep=5pt] (b4) {};
+\end{scope}
+\node[plab, blue!55!black]   at ([yshift=8pt]b1.north west) {1. XỬ LÝ DỮ LIỆU (Spark)};
+\node[plab, orange!60!black] at ([yshift=8pt]b2.north west) {2. TRÍCH XUẤT ĐẶC TRƯNG};
+\node[plab, teal!55!black]   at ([yshift=8pt]b3.north west) {3. MÔ HÌNH TWO-TOWER};
+\node[plab, teal!55!black]   at ([yshift=7pt]b4.north west) {4. ĐÁNH GIÁ};
+\end{tikzpicture}
+\caption{Sơ đồ khối end-to-end: từ xử lý dữ liệu đến mô hình và đánh giá}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Dữ liệu và tiền xử lý bằng PySpark}
+
+Dữ liệu sử dụng là \textbf{Amazon Reviews 2023} (nhóm McAuley Lab, UCSD), danh mục
+\textit{Software}, gồm hai phần: tập \textbf{tương tác} (review của người dùng, các
+trường \texttt{user\_id}, \texttt{parent\_asin}, \texttt{rating}, \texttt{title},
+\texttt{text}, \texttt{timestamp}) và tập \textbf{metadata sản phẩm} (tiêu đề, tính
+năng, mô tả, danh mục, giá, điểm trung bình\ldots). Quy mô bài toán được tổng hợp
+trong Bảng~\ref{tab:stats}.
+
+\begin{table}[H]
+\centering
+\caption{Thống kê quy mô bộ dữ liệu Amazon Software}
+\label{tab:stats}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{0.86\textwidth}{@{}X r@{}}
+\toprule
+\textbf{Thuộc tính} & \textbf{Giá trị} \\
+\midrule
+Số người dùng                         & $146.396$ \\
+Số sản phẩm phần mềm độc nhất          & $> 17.000$ \\
+Số tương tác huấn luyện (train)        & $\approx 984.000$ \\
+Số mẫu kiểm định (validation)          & $146.396$ (1 / người dùng) \\
+Số mẫu kiểm thử (test)                 & $146.396$ (1 / người dùng) \\
+Số chiều vector biểu diễn              & $384$ \\
+Thang điểm đánh giá                    & $1$ -- $5$ sao \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Theo giao thức leave-last-out, mỗi người dùng đóng góp đúng một mẫu cho tập kiểm
+định và một mẫu cho tập kiểm thử, phần còn lại thuộc tập huấn luyện. Phân phối số
+tương tác trên mỗi người dùng (Hình~\ref{fig:userint}) lệch phải mạnh -- đa số người
+dùng chỉ có vài tương tác, một thiểu số rất tích cực -- phản ánh tính thưa thớt và
+đuôi dài đặc trưng của dữ liệu thương mại điện tử.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{user_interactions.png}
+\caption{Phân phối số tương tác trên mỗi người dùng}
+\label{fig:userint}
+\end{figure}
+
+\subsection{Làm sạch và kiểm tra chất lượng dữ liệu}
+
+Dữ liệu thô từ Amazon chứa nhiều giá trị thiếu và bản ghi trùng. Quy trình làm sạch
+trên Spark gồm: (i) \textbf{khai báo lược đồ tường minh} (\texttt{StructType}) khi
+đọc metadata để kiểm soát kiểu dữ liệu của các trường phức tạp (mảng, map); (ii)
+\textbf{đếm giá trị thiếu} từng cột để đánh giá chất lượng; (iii) \textbf{khử trùng
+lặp} bằng \texttt{dropDuplicates}; và (iv) \textbf{ghép nối} tập chia chuẩn với dữ
+liệu đầy đủ bằng \texttt{broadcast join} -- kỹ thuật phát tán bảng nhỏ tới mọi
+executor, tránh thao tác shuffle tốn kém trên bảng lớn.
+
+\begin{lstlisting}[language=Python, caption=Kiểm tra null và ghép nối broadcast trên Spark]
+from pyspark.sql.functions import col, count, when, isnan, broadcast
+
+# Dem so gia tri thieu tren tung cot
+df.select([
+    count(when(col(c).isNull(), c)).alias(c) for c in df.columns
+]).show()
+
+# Khu trung lap
+df = df.dropDuplicates()
+
+# Ghep tap split chuan (nho) voi du lieu day du (lon) bang broadcast join
+df_train_ok = broadcast(df_train).join(
+    df, on=["user_id", "parent_asin", "timestamp"], how="left")
+\end{lstlisting}
+
+Các trường số như \texttt{price} và \texttt{rating\_number} có phân phối lệch phải
+rất mạnh nên được biến đổi \texttt{log1p} để nén khoảng giá trị, giúp ổn định khi
+đưa vào mô hình. Cuối cùng, tập tương tác được lọc để chỉ giữ lại các sản phẩm tồn
+tại trong bảng metadata, bảo đảm mọi sản phẩm đều có văn bản ngữ nghĩa.
+
+\subsection{Dựng văn bản ngữ nghĩa cho sản phẩm}
+
+Bước quan trọng nhất của tiền xử lý là tổng hợp các trường metadata rời rạc thành một
+chuỗi văn bản ngữ nghĩa thống nhất (\texttt{semantic\_text}) để làm đầu vào cho mô
+hình ngôn ngữ. Các trường dạng mảng được ghép bằng \texttt{concat\_ws}, trường
+\texttt{details} dạng map được duyệt thành các dòng "khóa: giá trị":
+
+\begin{lstlisting}[language=Python, caption=Dựng semantic\_text từ metadata bằng PySpark]
+from pyspark.sql import functions as F
+
+# Ghep cac truong mang (features, description, categories) thanh text
+for c in ["features", "description", "categories"]:
+    df_i = df_i.withColumn(f"{c}_text",
+        F.when(F.col(c).isNotNull(), F.concat_ws(" ", F.col(c))).otherwise(F.lit("")))
+
+# Tong hop semantic_text co cau truc theo tung khoi
+df_i = df_i.withColumn("semantic_text", F.concat_ws("\n\n",
+    F.when(F.col("title") != "",         F.concat(F.lit("TITLE\n"), F.col("title"))),
+    F.when(F.col("features_text") != "", F.concat(F.lit("FEATURES\n"), F.col("features_text"))),
+    F.when(F.col("description_text") != "", F.concat(F.lit("DESCRIPTION\n"), F.col("description_text"))),
+    F.when(F.col("categories_text") != "", F.concat(F.lit("CATEGORIES\n"), F.col("categories_text")))))
+
+# Chuan hoa truong so: log1p cho gia va so luong danh gia (giam lech phai)
+df_i = df_i.withColumn("price", F.log1p(F.col("price")))
+df_i = df_i.withColumn("rating_number", F.log1p(F.col("rating_number")))
+\end{lstlisting}
+
+Một ví dụ \texttt{semantic\_text} sau khi tổng hợp có dạng như sau:
+
+\begin{lstlisting}[caption=Ví dụ văn bản ngữ nghĩa của một sản phẩm phần mềm]
+TITLE
+Norton 360 Deluxe 2024, Antivirus software for 5 Devices
+
+FEATURES
+Real-time protection against malware, ransomware and phishing
+Secure VPN for online privacy; 50 GB cloud backup
+
+CATEGORIES
+Software | Antivirus & Security | Internet Security Suites
+\end{lstlisting}
+
+Khi đưa vào mô hình ngôn ngữ, toàn bộ khối văn bản này được nén thành một vector
+$384$ chiều duy nhất, "hiểu" được rằng đây là phần mềm bảo mật -- nhờ đó các sản
+phẩm cùng loại sẽ nằm gần nhau trong không gian biểu diễn.
+
+Dữ liệu sau xử lý được lưu thành các tệp Parquet riêng cho tập huấn luyện, kiểm định,
+kiểm thử và bảng sản phẩm. Phân phối điểm đánh giá (Hình~\ref{fig:rating}) lệch mạnh
+về phía điểm cao -- đặc trưng điển hình của dữ liệu thương mại điện tử. Độ dài
+\texttt{semantic\_text} (Hình~\ref{fig:textlen}) có trung vị khoảng $70$--$80$ token;
+mô hình giới hạn \texttt{max\_length = 128} để cân bằng giữa thông tin và tốc độ.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}{0.49\textwidth}
+    \centering\includegraphics[width=\textwidth]{rating_distribution.png}
+    \caption{Phân phối điểm đánh giá}
+    \label{fig:rating}
+\end{subfigure}
+\hfill
+\begin{subfigure}{0.49\textwidth}
+    \centering\includegraphics[width=\textwidth]{text_length.png}
+    \caption{Độ dài semantic\_text}
+    \label{fig:textlen}
+\end{subfigure}
+\caption{Một số đặc trưng của dữ liệu Amazon Software}
+\label{fig:data-eda}
+\end{figure}
+
+\section{Chiến lược chia dữ liệu theo thời gian}
+
+Để mô phỏng sát kịch bản thực tế (dự đoán hành vi \textit{tương lai} từ
+\textit{quá khứ}), đồ án áp dụng phương pháp \textbf{cắt chuỗi hành vi theo thời
+gian} (leave-last-out) cho mỗi người dùng:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Tập kiểm thử (test):} sản phẩm được tương tác \textit{cuối cùng}.
+    \item \textbf{Tập kiểm định (validation):} sản phẩm \textit{kề cuối}.
+    \item \textbf{Tập huấn luyện (train):} toàn bộ các tương tác \textit{trước đó}.
+\end{itemize}
+
+Cách chia này nghiêm ngặt hơn chia ngẫu nhiên vì tuyệt đối không để lộ thông tin
+tương lai vào quá khứ (Hình~\ref{fig:loo}). Lịch sử của tập kiểm định kế thừa từ tập
+huấn luyện; lịch sử của tập kiểm thử được tính trên hợp của tập huấn luyện và kiểm
+định.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\footnotesize,
+    tr/.style={rectangle, rounded corners=2pt, draw=blue!55, fill=blue!10, minimum width=1.15cm, minimum height=0.8cm},
+    va/.style={rectangle, rounded corners=2pt, draw=orange!70, fill=orange!15, minimum width=1.15cm, minimum height=0.8cm},
+    te/.style={rectangle, rounded corners=2pt, draw=red!65, fill=red!12, minimum width=1.15cm, minimum height=0.8cm}]
+\node[tr] (t1) {$i_1$};
+\node[tr, right=0.18cm of t1] (t2) {$i_2$};
+\node[right=0.18cm of t2] (dots) {$\cdots$};
+\node[tr, right=0.18cm of dots] (t3) {$i_{n-2}$};
+\node[va, right=0.18cm of t3] (t4) {$i_{n-1}$};
+\node[te, right=0.18cm of t4] (t5) {$i_{n}$};
+\draw[-{Stealth[length=2.4mm]}, line width=0.8pt, gray!70]
+    ([yshift=-0.65cm]t1.south west) -- ([yshift=-0.65cm]t5.south east)
+    node[midway, below, font=\scriptsize] {Thời gian};
+\node[below=0.02cm of t1, font=\scriptsize, blue!55!black] {};
+\draw[decorate, decoration={brace, amplitude=4pt}, blue!55]
+    (t1.north west) -- (t3.north east) node[midway, above=3pt, font=\scriptsize\bfseries, blue!55!black] {Train};
+\node[above=0.5cm of t4, font=\scriptsize\bfseries, orange!70!black] {Val};
+\node[above=0.5cm of t5, font=\scriptsize\bfseries, red!65!black] {Test};
+\draw[-{Stealth[length=1.6mm]}, orange!70] ([yshift=0.32cm]t4.north) -- (t4.north);
+\draw[-{Stealth[length=1.6mm]}, red!65] ([yshift=0.32cm]t5.north) -- (t5.north);
+\end{tikzpicture}
+\caption{Chia dữ liệu leave-last-out: mục cuối làm test, kề cuối làm val, còn lại train}
+\label{fig:loo}
+\end{figure}
+
+\section{Mã hóa trải nghiệm và tổng hợp lịch sử người dùng}
+
+\subsection{Mã hóa trải nghiệm}
+
+Trước hết, mỗi sản phẩm được biểu diễn bằng một chuỗi văn bản tổng hợp
+(\texttt{item\_text\_map}) ghép \texttt{semantic\_text} với các thuộc tính bổ sung
+(danh mục, cửa hàng, giá, điểm và số lượng đánh giá):
+
+\begin{lstlisting}[language=Python, caption=Dựng từ điển văn bản sản phẩm item\_text\_map]
+item_text_map = {}
+for r in item_df.itertuples():
+    item_text_map[r.parent_asin] = (
+        f"{safe(r.semantic_text)}\n"
+        f"Category: {safe(r.main_category)}\nStore: {safe(r.store)}\n"
+        f"Price: {safe(r.price)}\nAverage Rating: {safe(r.average_rating)}\n"
+        f"Rating Count: {safe(r.rating_number)}")
+\end{lstlisting}
+
+Mỗi tương tác của người dùng được biến thành một "trải nghiệm" bằng cách ghép văn bản
+sản phẩm trên với tiêu đề và nội dung review, rồi mã hóa qua mô hình MiniLM (đóng băng)
+theo từng batch trên GPU:
+
+\begin{lstlisting}[language=Python, caption=Mã hóa trải nghiệm người dùng hàng loạt trên GPU]
+def precompute_user_experience_vectors(df, batch_size=256):
+    base = df['parent_asin'].map(item_text_map).fillna('None')
+    combined = (base + "\nUser Review Title: " + df['title'].fillna('None')
+                     + "\nUser Review Content: " + df['text'].fillna('None')).tolist()
+    vectors = []
+    with torch.no_grad():
+        for i in range(0, len(combined), batch_size):
+            enc = tokenizer(combined[i:i+batch_size], padding=True, truncation=True,
+                            max_length=128, return_tensors="pt").to(device)
+            out = base_model(**enc)
+            emb = F.normalize(mean_pooling(out, enc["attention_mask"]), dim=1)
+            vectors.append(emb.cpu().numpy())
+    return np.vstack(vectors)
+\end{lstlisting}
+
+\subsection{Tổng hợp lịch sử với trọng số thời gian}
+
+Vector đại diện cho một người dùng là \textit{trung bình có trọng số} của các vector
+trải nghiệm trong lịch sử. Trọng số kết hợp hai yếu tố: (i) \textbf{độ gần đây}
+(recency) -- tương tác càng mới càng quan trọng, theo hàm suy giảm mũ
+$e^{-(n-i)/n}$; và (ii) \textbf{mức độ ưa thích} -- điểm rating càng cao trọng số
+càng lớn, theo hệ số $(1 + \text{rating}/5)$:
+
+\begin{equation}
+    \mathbf{u} = \frac{\sum_{i=1}^{n} w_i\, \mathbf{e}_i}{\sum_{i=1}^{n} w_i},
+    \qquad
+    w_i = e^{-(n-i)/n} \cdot \left(1 + \frac{\text{rating}_i}{5}\right),
+\end{equation}
+
+trong đó $\mathbf{e}_i$ là vector trải nghiệm thứ $i$ và $n$ là số tương tác của
+người dùng. Vector kết quả được chuẩn hóa $L_2$. Hình~\ref{fig:timedecay} minh họa
+cách trọng số tăng dần về phía các tương tác gần đây nhất. Toàn bộ phép tổng hợp này
+chạy trên CPU/RAM (gom nhóm theo \texttt{user\_id}), độc lập với GPU, nên rất nhẹ và
+nhanh.
+
+\begin{lstlisting}[language=Python, caption=Tổng hợp vector lịch sử có trọng số thời gian]
+def aggregate_user_history(df, experience_vectors):
+    df['_vec'] = list(experience_vectors)
+    user_hist = {}
+    for uid, g in df.groupby("user_id"):
+        g = g.reset_index(drop=True); n = len(g)
+        vectors = np.array(g['_vec'].tolist())
+        idx = np.arange(n)
+        recency = np.exp(-(n - idx) / max(n, 1))          # cang moi cang nang
+        ratings = g['rating'].fillna(0).to_numpy()
+        weights = (recency * (1 + ratings / 5.0)).reshape(-1, 1)
+        u = np.sum(vectors * weights, axis=0) / np.sum(weights)
+        user_hist[uid] = u / (np.linalg.norm(u) + 1e-9)   # chuan hoa L2
+    return user_hist
+\end{lstlisting}
+
+Phép \textbf{mean pooling có mặt nạ} (dùng ở cả khâu mã hóa) lấy trung bình các vector
+token, bỏ qua token đệm nhờ \texttt{attention\_mask}:
+
+\begin{lstlisting}[language=Python, caption=Mean pooling có mặt nạ]
+def mean_pooling(out, mask):
+    token = out.last_hidden_state                      # [B, L, 384]
+    mask = mask.unsqueeze(-1).expand(token.size()).float()
+    return (token * mask).sum(1) / torch.clamp(mask.sum(1), min=1e-9)
+\end{lstlisting}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.74\textwidth]{time_decay.png}
+\caption{Trọng số thời gian khi tổng hợp vector lịch sử người dùng ($n = 15$)}
+\label{fig:timedecay}
+\end{figure}
+
+Toàn bộ luồng tổng hợp được tóm tắt trong Hình~\ref{fig:aggflow}: các vector trải
+nghiệm được nhân với trọng số tương ứng, cộng lại rồi chuẩn hóa thành một vector
+người dùng duy nhất.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[font=\footnotesize, node distance=0.7cm,
+    e/.style={rectangle, rounded corners=2pt, draw=blue!55, fill=blue!9, minimum width=1.3cm, minimum height=0.7cm},
+    op/.style={circle, draw=teal!60, fill=teal!12, minimum size=0.8cm},
+    o/.style={rectangle, rounded corners=2pt, draw=orange!70, fill=orange!12, minimum width=1.8cm, minimum height=0.7cm},
+    a/.style={-{Stealth[length=2mm]}, line width=0.7pt, blue!55}]
+\node[e] (e1) {$\mathbf{e}_1$};
+\node[e, below=0.3cm of e1] (e2) {$\mathbf{e}_2$};
+\node[below=0.18cm of e2, font=\scriptsize] (ed) {$\vdots$};
+\node[e, below=0.25cm of ed] (en) {$\mathbf{e}_n$};
+\node[op, right=1.6cm of e2] (sum) {$\sum$};
+\node[o, right=1.3cm of sum] (norm) {L2 Normalize};
+\node[o, right=0.9cm of norm, fill=orange!18] (u) {$\mathbf{u}$};
+\draw[a] (e1) -- node[above, font=\scriptsize, pos=0.45] {$\times w_1$} (sum);
+\draw[a] (e2) -- node[above, font=\scriptsize, pos=0.5] {$\times w_2$} (sum);
+\draw[a] (en) -- node[below, font=\scriptsize, pos=0.45] {$\times w_n$} (sum);
+\draw[a] (sum) -- (norm);
+\draw[a] (norm) -- (u);
+\node[below=0.55cm of sum, font=\scriptsize, gray!55!black, text width=3cm, align=center]
+    {$w_i = e^{-(n-i)/n}(1+\text{rating}_i/5)$};
+\end{tikzpicture}
+\caption{Luồng tổng hợp vector lịch sử người dùng từ các vector trải nghiệm}
+\label{fig:aggflow}
+\end{figure}
+
+\section{Thiết kế mô hình hai tháp}
+
+Mô hình \texttt{TwoTowerVectorModel} hiện thực hóa kiến trúc ở
+Mục~\ref{sec:twotower}. \textbf{Tháp người dùng} là một mạng MLP biến đổi vector
+lịch sử $384$ chiều, có \texttt{BatchNorm} để ổn định gradient và \texttt{Dropout}
+để chống quá khớp. \textbf{Tháp sản phẩm} là MiniLM \textbf{đóng băng}, chỉ làm
+nhiệm vụ mã hóa văn bản.
+
+\begin{lstlisting}[language=Python, caption=Mô hình hai tháp (tháp sản phẩm đóng băng)]
+class TwoTowerVectorModel(nn.Module):
+    def __init__(self, model_name):
+        super().__init__()
+        # Thap User: MLP co the huan luyen
+        self.user_projection = nn.Sequential(
+            nn.Linear(384, 512), nn.BatchNorm1d(512), nn.ReLU(),
+            nn.Dropout(0.5), nn.Linear(512, 384))
+        # Thap Item: dong bang hoan toan
+        self.item_encoder = AutoModel.from_pretrained(model_name)
+        for p in self.item_encoder.parameters():
+            p.requires_grad = False
+
+    def forward_user(self, user_vectors):
+        return F.normalize(self.user_projection(user_vectors), dim=1)
+
+    def forward_item(self, tokens):
+        with torch.no_grad():
+            out = self.item_encoder(**tokens)
+            emb = self.mean_pooling(out, tokens["attention_mask"])
+        return F.normalize(emb, dim=1)
+\end{lstlisting}
+
+\subsection{Sơ đồ kiến trúc chi tiết}
+
+Hình~\ref{fig:model-detail} mô tả chi tiết từng tầng của mô hình cùng kích thước
+tensor tương ứng ($B$ là kích thước batch, $L$ là độ dài chuỗi token). Tháp người
+dùng biến đổi vector lịch sử qua một khối MLP, còn tháp sản phẩm đưa chuỗi token qua
+$6$ tầng Transformer của MiniLM rồi gộp trung bình. Hai vector đầu ra cùng kích
+thước $384$ chiều được chuẩn hóa và đem so khớp bằng tích vô hướng.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    font=\scriptsize,
+    layer/.style={rectangle, rounded corners=2pt, draw=blue!55, fill=blue!8,
+        line width=0.7pt, text width=2.75cm, minimum height=0.6cm, align=center},
+    frozen/.style={rectangle, rounded corners=2pt, draw=gray!60, fill=gray!12,
+        line width=0.7pt, text width=2.75cm, minimum height=0.6cm, align=center},
+    io/.style={rectangle, rounded corners=2pt, draw=teal!60, fill=teal!10,
+        line width=0.7pt, text width=2.75cm, minimum height=0.6cm, align=center},
+    sh/.style={font=\scriptsize\itshape, text=gray!55!black},
+    a/.style={-{Stealth[length=1.6mm]}, line width=0.6pt, blue!55},
+    ag/.style={-{Stealth[length=1.6mm]}, line width=0.6pt, gray!60}
+]
+% ===== USER TOWER (left) =====
+\node[io] (uin) {Vector lịch sử người dùng};
+\node[sh, right=0.15cm of uin] {[B, 384]};
+\node[layer, above=0.4cm of uin] (l1) {Linear $384 \to 512$};
+\node[sh, right=0.15cm of l1] {[B, 512]};
+\node[layer, above=0.35cm of l1] (l2) {BatchNorm1d(512)};
+\node[layer, above=0.35cm of l2] (l3) {ReLU};
+\node[layer, above=0.35cm of l3] (l4) {Dropout($0.5$)};
+\node[layer, above=0.35cm of l4] (l5) {Linear $512 \to 384$};
+\node[sh, right=0.15cm of l5] {[B, 384]};
+\node[io, above=0.4cm of l5] (un) {L2 Normalize};
+\draw[a] (uin)--(l1); \draw[a] (l1)--(l2); \draw[a] (l2)--(l3);
+\draw[a] (l3)--(l4); \draw[a] (l4)--(l5); \draw[a] (l5)--(un);
+
+% ===== ITEM TOWER (right) =====
+\node[io, right=3.0cm of uin] (iin) {Tokens semantic\_text};
+\node[sh, right=0.15cm of iin] {[B, L]};
+\node[frozen, above=0.4cm of iin] (e1) {Embedding};
+\node[sh, right=0.15cm of e1] {[B, L, 384]};
+\node[frozen, above=0.35cm of e1] (e2) {Transformer $\times\,6$\\(self-attention + FFN)};
+\node[sh, right=0.15cm of e2] {[B, L, 384]};
+\node[frozen, above=0.62cm of e2] (e3) {Mean Pooling (có mặt nạ)};
+\node[sh, right=0.15cm of e3] {[B, 384]};
+\node[io, above=0.4cm of e3] (inr) {L2 Normalize};
+\draw[ag] (iin)--(e1); \draw[ag] (e1)--(e2); \draw[ag] (e2)--(e3); \draw[ag] (e3)--(inr);
+\node[font=\scriptsize\bfseries, below=0.12cm of iin, text=gray!55!black]
+    {Tháp Item (đóng băng)};
+\node[font=\scriptsize\bfseries, below=0.12cm of uin, text=blue!55!black]
+    {Tháp User (huấn luyện)};
+
+% ===== TOP: similarity =====
+\node[rectangle, rounded corners=3pt, draw=orange!70, fill=orange!12,
+      line width=0.9pt, text width=4.8cm, align=center, minimum height=0.75cm,
+      above=1.15cm of $(un)!0.5!(inr)$] (sim)
+      {Ma trận tương đồng $\mathbf{U}\mathbf{V}^\top$ $\;$[B, B]\\$\to$ InfoNCE Loss};
+\draw[a] (un) |- (sim);
+\draw[ag] (inr) |- (sim);
+\end{tikzpicture}
+\caption{Sơ đồ kiến trúc chi tiết của mô hình hai tháp kèm kích thước tensor}
+\label{fig:model-detail}
+\end{figure}
+
+\subsection{Phân tích số tham số}
+
+Một ưu điểm nổi bật của thiết kế là \textbf{hiệu quả tham số}. Bảng~\ref{tab:params}
+liệt kê số tham số của tháp người dùng -- chỉ khoảng $395.000$ tham số khả huấn
+luyện, trong khi tháp sản phẩm (MiniLM) có $\sim 22{,}7$ triệu tham số nhưng được
+\textbf{đóng băng hoàn toàn}. Như vậy, chỉ khoảng \textbf{$1{,}7\%$} tổng số tham số
+thực sự được cập nhật (Hình~\ref{fig:params}), giúp giảm mạnh chi phí bộ nhớ và thời
+gian huấn luyện.
+
+\begin{table}[H]
+\centering
+\caption{Số tham số khả huấn luyện của tháp người dùng}
+\label{tab:params}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{0.82\textwidth}{@{}X r@{}}
+\toprule
+\textbf{Tầng} & \textbf{Số tham số} \\
+\midrule
+Linear $384 \to 512$        & $197.120$ \\
+BatchNorm1d$(512)$          & $1.024$ \\
+Linear $512 \to 384$        & $196.992$ \\
+\midrule
+\textbf{Tổng (khả huấn luyện)} & $\mathbf{395.136}$ \\
+Tháp Item (MiniLM, đóng băng)  & $\approx 22.700.000$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.62\textwidth]{param_breakdown.png}
+\caption{Phân bổ tham số giữa hai tháp (chỉ $\sim 1{,}7\%$ được huấn luyện)}
+\label{fig:params}
+\end{figure}
+
+\section{Hàm mất mát và cấu hình huấn luyện}
+
+Mô hình được huấn luyện bằng hàm mất mát \textbf{InfoNCE} (Mục~\ref{sec:infonce})
+với mẫu âm trong batch. Ma trận tương đồng giữa mọi người dùng và mọi sản phẩm trong
+batch được tính, nhãn đúng nằm trên đường chéo:
+
+\begin{lstlisting}[language=Python, caption=Hàm mất mát InfoNCE với mẫu âm trong batch]
+class InfoNCE(nn.Module):
+    def __init__(self, temperature=0.1):
+        super().__init__()
+        self.temperature = temperature
+        self.ce = nn.CrossEntropyLoss()
+
+    def forward(self, user_out, item_out):
+        sim = torch.matmul(user_out, item_out.T) / self.temperature
+        labels = torch.arange(user_out.size(0), device=user_out.device)
+        return self.ce(sim, labels)
+
+loss_fn = InfoNCE(temperature=0.1)
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=5e-2)
+\end{lstlisting}
+
+Mô hình được tối ưu bằng \texttt{AdamW} (learning rate $10^{-4}$, weight decay
+$0{,}05$). Quá trình huấn luyện áp dụng \textbf{tính toán độ chính xác hỗn hợp}
+(mixed precision) để tiết kiệm bộ nhớ GPU và tăng tốc, kèm cơ chế dừng sớm (early
+stopping) dựa trên mất mát kiểm định. Chi tiết cấu hình và kết quả được trình bày ở
+Chương~\ref{chap:exp}.

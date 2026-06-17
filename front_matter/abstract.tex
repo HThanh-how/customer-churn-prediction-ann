@@ -1,0 +1,43 @@
+% =====================================================================
+%  TÓM TẮT
+% =====================================================================
+\newpage
+\thispagestyle{plain}
+\vspace*{0.5cm}
+\begin{center}
+    {\LARGE\textbf{\MakeUppercase{Tóm tắt đồ án}}}
+\end{center}
+\vspace{0.4cm}
+
+Báo cáo trình bày quá trình thiết kế và xây dựng một \textbf{hệ thống gợi ý
+(Recommender System)} cho nhóm sản phẩm \textit{Software} trên sàn thương mại điện
+tử Amazon, đặt trong bối cảnh \textbf{dữ liệu lớn (Big Data)}. Khác với các hệ thống
+lọc cộng tác truyền thống dựa trên định danh -- vốn bỏ qua văn bản ngữ nghĩa và gặp
+khó với bài toán khởi động lạnh -- đồ án đề xuất một hướng tiếp cận hiện đại kết hợp
+\textbf{mô hình ngôn ngữ}, \textbf{kiến trúc hai tháp (Two-Tower)} và \textbf{học
+tương phản (contrastive learning)}.
+
+\vspace{0.25cm}
+Toàn bộ pipeline tiền xử lý được triển khai trên \textbf{Apache Spark (PySpark)}:
+nạp dữ liệu Amazon Reviews thô, làm sạch, ghép nối các tập chia theo thời gian và
+dựng văn bản ngữ nghĩa (\texttt{semantic\_text}) cho hơn $17.000$ sản phẩm, lưu trữ
+tối ưu bằng định dạng cột \textbf{Parquet}. Mỗi sản phẩm được mã hóa thành vector
+$384$ chiều bằng mô hình \texttt{all-MiniLM-L6-v2} (đóng băng); vector lịch sử của
+$146.000$ người dùng được tổng hợp với \textbf{trọng số thời gian} kết hợp độ gần
+đây và mức độ ưa thích. Mô hình hai tháp được huấn luyện bằng hàm mất mát
+\textbf{InfoNCE} với mẫu âm trong batch, tối ưu bằng AdamW và tính toán độ chính xác
+hỗn hợp trên GPU.
+
+\vspace{0.25cm}
+Hệ thống được đánh giá bằng giao thức \textbf{toàn kho (full-catalog)} khắt khe --
+mã hóa trước toàn bộ kho sản phẩm rồi để mỗi người dùng cạnh tranh trên toàn bộ kho.
+Kết quả cho thấy mô hình đạt Recall@10 $= 0{,}0142$ và Recall@50 $= 0{,}0436$,
+\textbf{vượt trội hơn $24$ lần ở Top-$10$ và hơn $14$ lần ở Top-$50$} so với baseline
+chọn ngẫu nhiên, đồng thời hội tụ ổn định mà không quá khớp. Báo cáo kết luận bằng
+việc chỉ ra hạn chế của tháp sản phẩm đóng băng và đề xuất hướng phát triển: tinh
+chỉnh tháp sản phẩm bằng LoRA và tích hợp tìm kiếm vector siêu tốc FAISS cho gợi ý
+thời gian thực.
+
+\vspace{0.4cm}
+\noindent\textbf{Từ khóa:} \textit{Hệ thống gợi ý, Two-Tower, Mô hình ngôn ngữ,
+Sentence Embedding, Học tương phản, InfoNCE, Apache Spark, Big Data, Amazon Reviews.}

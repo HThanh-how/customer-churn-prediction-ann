@@ -1,0 +1,99 @@
+% =====================================================================
+%  CHƯƠNG 1: TỔNG QUAN ĐỀ TÀI
+% =====================================================================
+\chapter{Tổng quan đề tài}
+\label{chap:intro}
+
+\section{Đặt vấn đề}
+
+Thương mại điện tử hiện đại đặt người dùng trước hàng triệu lựa chọn, dẫn tới hiện
+tượng \textit{quá tải thông tin} (information overload). \textbf{Hệ thống gợi ý}
+(Recommender System) ra đời nhằm tự động lọc và đề xuất cho mỗi người dùng những sản
+phẩm phù hợp nhất với sở thích của họ. Đối với nhóm sản phẩm \textbf{Software} (phần
+mềm) trên Amazon, bài toán càng quan trọng bởi sản phẩm mang tính chuyên biệt cao,
+mô tả kỹ thuật dài và đánh giá người dùng giàu ngữ nghĩa.
+
+Tuy nhiên, các hệ thống gợi ý truyền thống dựa trên \textbf{định danh} (ID-based
+collaborative filtering) bộc lộ hai hạn chế cố hữu:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Bỏ qua dữ liệu văn bản ngữ nghĩa:} các mô hình lọc cộng tác cổ
+    điển chỉ học từ ma trận tương tác (ai đã mua/đánh giá gì), hoàn toàn không khai
+    thác phần mô tả sản phẩm, tính năng hay nội dung review -- vốn chứa thông tin
+    rất giá trị về bản chất sản phẩm.
+    \item \textbf{Bài toán khởi động lạnh (cold-start):} khi xuất hiện người dùng
+    mới hoặc sản phẩm mới chưa có lịch sử tương tác, mô hình dựa trên định danh không
+    thể đưa ra dự đoán đáng tin cậy.
+\end{itemize}
+
+\section{Giải pháp đề xuất}
+
+Đồ án đề xuất một hướng tiếp cận hiện đại nhằm khắc phục đồng thời hai hạn chế trên,
+dựa trên ba trụ cột:
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Mô hình ngôn ngữ (Language Model):} sử dụng một mô hình ngôn ngữ
+    dựa trên kiến trúc Transformer để \textit{hiểu} văn bản mô tả sản phẩm và nội
+    dung đánh giá, chuyển toàn bộ thông tin văn bản dài thành một \textit{vector số
+    cố định} đại diện cho ý nghĩa của sản phẩm. Nhờ vậy, hệ thống nắm bắt được sự
+    tương đồng ngữ nghĩa ngay cả với sản phẩm mới.
+    \item \textbf{Kiến trúc hai tháp (Two-Tower):} tách riêng việc biểu diễn
+    \textit{người dùng} và \textit{sản phẩm} thành hai nhánh độc lập, cùng ánh xạ
+    vào một không gian vector chung. Nhánh người dùng học từ \textit{chuỗi hành vi
+    theo thời gian}, có tính tới yếu tố thời điểm và mức độ ưa thích.
+    \item \textbf{Học tương phản (Contrastive Learning):} huấn luyện mô hình bằng
+    cách kéo các sản phẩm mà người dùng thích lại gần vector người dùng và đẩy các
+    sản phẩm không liên quan ra xa trong không gian biểu diễn.
+\end{enumerate}
+
+\section{Mục tiêu và phạm vi}
+
+\textbf{Mục tiêu} của đồ án là xây dựng một \textit{luồng xử lý hoàn chỉnh}
+(end-to-end pipeline) cho hệ thống gợi ý phần mềm, bao gồm:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item Nạp và tiền xử lý dữ liệu lớn bằng \textbf{Apache Spark}, lưu trữ tối ưu
+    theo định dạng cột \textbf{Apache Parquet}.
+    \item Mã hóa "trải nghiệm" của người dùng thành vector bằng mô hình ngôn ngữ,
+    tích hợp trọng số thời gian.
+    \item Huấn luyện mô hình hai tháp với hàm mất mát tương phản.
+    \item Đánh giá khách quan độ hiệu quả trên \textbf{toàn bộ kho sản phẩm}
+    (full-catalog), thay vì chỉ trên một nhóm nhỏ.
+\end{itemize}
+
+\textbf{Phạm vi:} Báo cáo tập trung vào danh mục \textit{Software} của bộ dữ liệu
+Amazon Reviews 2023, với khoảng $146.000$ người dùng và hơn $17.000$ sản phẩm phần
+mềm độc nhất. Bài toán được mô hình hóa theo dạng \textbf{truy hồi} (retrieval):
+với mỗi người dùng, hệ thống xếp hạng toàn bộ kho sản phẩm và trả về danh sách
+Top-$N$ phù hợp nhất.
+
+\section{Đóng góp của báo cáo}
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item Xây dựng pipeline xử lý dữ liệu lớn end-to-end trên PySpark, tạo ra biểu
+    diễn văn bản ngữ nghĩa (\texttt{semantic\_text}) thống nhất cho sản phẩm.
+    \item Thiết kế thuật toán tổng hợp vector lịch sử người dùng có \textit{trọng số
+    thời gian} (recency) kết hợp mức độ ưa thích (rating), tính toán hiệu quả trên
+    bộ nhớ.
+    \item Cài đặt và huấn luyện mô hình Two-Tower với mô hình ngôn ngữ làm bộ mã hóa
+    sản phẩm và hàm mất mát tương phản InfoNCE.
+    \item Đề xuất giao thức đánh giá \textbf{full-catalog} loại bỏ thiên lệch đánh
+    giá cục bộ, chứng minh mô hình vượt trội nhiều lần so với baseline ngẫu nhiên.
+\end{itemize}
+
+\section{Cấu trúc báo cáo}
+
+Báo cáo được tổ chức theo năm chương:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Chương 1 -- Tổng quan đề tài:} đặt vấn đề, giải pháp, mục tiêu và
+    phạm vi.
+    \item \textbf{Chương 2 -- Cơ sở lý thuyết:} nền tảng dữ liệu lớn, mô hình ngôn
+    ngữ, kiến trúc hai tháp và học tương phản.
+    \item \textbf{Chương 3 -- Phân tích và thiết kế hệ thống:} kiến trúc tổng thể,
+    xử lý dữ liệu, chiến lược chia dữ liệu và thiết kế mô hình.
+    \item \textbf{Chương 4 -- Kết quả thực nghiệm:} môi trường, giao thức đánh giá
+    và phân tích kết quả.
+    \item \textbf{Chương 5 -- Kết luận và hướng phát triển:} tổng kết, hạn chế và
+    định hướng tương lai.
+\end{itemize}

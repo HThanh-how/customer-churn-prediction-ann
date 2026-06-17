@@ -1,63 +1,84 @@
-# Customer Churn Prediction using Artificial Neural Network (ANN)
+# Hệ thống gợi ý sản phẩm Software trên Amazon (Big Data)
 
-[![Python](https://img.shields.io/badge/Python-3.9+-blue.svg)](https://www.python.org/)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.20.0-orange.svg)](https://tensorflow.org)
 [![Build LaTeX](https://github.com/HThanh-how/customer-churn-prediction-ann/actions/workflows/latex.yml/badge.svg)](https://github.com/HThanh-how/customer-churn-prediction-ann/actions)
-[![Latest Release](https://img.shields.io/github/v/release/HThanh-how/customer-churn-prediction-ann)](https://github.com/HThanh-how/customer-churn-prediction-ann/releases)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
+[![Apache Spark](https://img.shields.io/badge/Apache%20Spark-3.5-orange.svg)](https://spark.apache.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.x-red.svg)](https://pytorch.org/)
 
-Dự án xây dựng mô hình mạng nơ-ron nhân tạo (ANN) truyền thẳng để dự đoán tỷ lệ khách hàng rời bỏ dịch vụ ngân hàng (Customer Churn) dựa trên bộ dữ liệu Churn Modelling từ Kaggle. Đây là nội dung thực hành Lab 4.1.
+> **Đồ án môn học: Dữ liệu lớn (Big Data)**
+> Trường Đại học Công nghệ Thông tin – ĐHQG TP.HCM
+> **GVHD:** Phạm Huy Thanh · **SVTH:** Đào Minh Trí
 
----
-
-## 📄 Báo Cáo PDF Kết Quả (Lab Report)
-Tải trực tiếp báo cáo học thuật đầy đủ được biên dịch tự động bằng LaTeX:
-
-👉 [**Tải báo cáo Bao_cao_Lab_4.1.pdf**](https://github.com/HThanh-how/customer-churn-prediction-ann/releases/latest/download/Bao_cao_Lab_4.1.pdf)
-
----
-
-## 📊 Kết Quả Thực Nghiệm Chính
-Mô hình ANN đạt độ chính xác cao trên tập kiểm thử (2,000 khách hàng mới hoàn toàn):
-* **Độ chính xác kiểm thử (Test Accuracy):** **85.65%**
-* **Hàm mất mát (Test Loss):** **0.3549**
-
-### Đồ thị Lịch sử Huấn luyện (Loss & Accuracy)
-![Loss and Accuracy History](training_history.png)
-
-### Ma trận nhầm lẫn (Confusion Matrix Heatmap)
-![Confusion Matrix Heatmap](confusion_matrix.png)
+Hệ thống gợi ý cho nhóm sản phẩm **Software** trên Amazon theo hướng **truy hồi
+ngữ nghĩa**: kết hợp **mô hình ngôn ngữ** (sentence embedding), **kiến trúc hai tháp
+(Two-Tower)** và **học tương phản (InfoNCE)** trên nền tảng dữ liệu lớn
+**Apache Spark**. Dữ liệu: *Amazon Reviews 2023 – Software* (~146K người dùng,
+>17K sản phẩm).
 
 ---
 
-## 🛠 Kiến Trúc Mạng ANN Đề Xuất
-* **Input Layer:** 11 node đặc trưng đầu vào (sau khi One-Hot Encoding và Scaling).
-* **Hidden Layer 1:** Dense (11 units), hàm kích hoạt `ReLU`.
-* **Hidden Layer 2:** Dense (128 units), hàm kích hoạt `ReLU`.
-* **Output Layer:** Dense (1 unit), hàm kích hoạt `Sigmoid` đưa ra xác suất rời mạng.
-* **Cấu hình Huấn luyện:**
-  * Optimizer: `Adam`
-  * Loss function: `Binary Cross-Entropy`
-  * Epochs: 10
-  * Batch Size: 10
+## 🧠 Kiến trúc
+
+```
+                 ┌─────────────────────────┐        ┌──────────────────────────┐
+ Lịch sử user →  │ Tháp User: MLP 384→512→  │        │ Tháp Item: MiniLM (đóng   │  ← semantic_text
+ (vector 384-d)  │ 384 + BatchNorm + Dropout│        │ băng) + mean pooling      │
+                 └────────────┬────────────┘        └────────────┬─────────────┘
+                              │  L2 normalize                     │  L2 normalize
+                              └──────────► cosine ◄───────────────┘
+                                     InfoNCE (in-batch negatives)
+```
+
+- **Tháp Item:** `sentence-transformers/all-MiniLM-L6-v2` (384-d, **đóng băng**).
+- **Tháp User:** MLP huấn luyện trên vector lịch sử có **trọng số thời gian**
+  (recency × rating).
+- **Loss:** InfoNCE (τ = 0.1) · **Optimizer:** AdamW · **Mixed precision** FP16.
+
+## 📊 Kết quả (đánh giá full-catalog trên >17K sản phẩm)
+
+| Chỉ số | Two-Tower | Ngẫu nhiên | Bội số |
+|---|:---:|:---:|:---:|
+| Recall@10 | **0.0142** | 0.00059 | ≈ **24×** |
+| Recall@50 | **0.0436** | 0.00294 | ≈ **14×** |
+| NDCG@10 | 0.0062 | – | – |
 
 ---
 
-## 🚀 Hướng Dẫn Cài Đặt và Chạy Notebook
+## 📁 Cấu trúc dự án
 
-1. **Clone repository:**
-   ```bash
-   git clone https://github.com/HThanh-how/customer-churn-prediction-ann.git
-   cd customer-churn-prediction-ann
-   ```
+```
+report.tex / report.pdf              # Báo cáo LaTeX (XeLaTeX, Times New Roman, 5 chương)
+front_matter/  chapters/             # Bìa, lời cảm ơn, tóm tắt, 5 chương + phụ lục
+images/                              # Hình minh hoạ (sinh từ scripts/)
+scripts/generate_figures.py          # Sinh hình từ số liệu huấn luyện thật
+ReSys_xu_ly_du_lieu_pyspark.ipynb    # (1) Tiền xử lý dữ liệu lớn bằng PySpark → Parquet
+code_trainning.ipynb                 # (2) Huấn luyện Two-Tower + đánh giá full-catalog
+requirements.txt
+.github/workflows/latex.yml          # CI tự build PDF + tạo release
+```
 
-2. **Tạo môi trường ảo và cài đặt thư viện:**
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
+---
 
-3. **Chạy Jupyter Notebook:**
-   ```bash
-   jupyter notebook churn_modelling.ipynb
-   ```
+## 🚀 Hướng dẫn sử dụng
+
+```bash
+pip install -r requirements.txt
+# (1) Tiền xử lý dữ liệu  →  Parquet
+jupyter notebook ReSys_xu_ly_du_lieu_pyspark.ipynb
+# (2) Huấn luyện & đánh giá mô hình hai tháp
+jupyter notebook code_trainning.ipynb
+# Sinh lại hình & biên dịch báo cáo
+python scripts/generate_figures.py
+xelatex report.tex && xelatex report.tex
+```
+> Hai notebook được tối ưu cho **Google Colab** (GPU). Dữ liệu *Amazon Reviews 2023
+> – Software* tải từ <https://amazon-reviews-2023.github.io/>.
+
+---
+
+## 🛠 Công nghệ
+Apache Spark (PySpark) · Apache Parquet · PyTorch · Hugging Face Transformers ·
+Sentence-Transformers (MiniLM) · InfoNCE contrastive learning · XeLaTeX.
+
+## 🔭 Hướng phát triển
+Tinh chỉnh tháp sản phẩm bằng **LoRA** · tích hợp **FAISS** cho gợi ý thời gian thực.

@@ -1,0 +1,315 @@
+% =====================================================================
+%  CHƯƠNG 4: KẾT QUẢ THỰC NGHIỆM
+% =====================================================================
+\chapter{Kết quả thực nghiệm}
+\label{chap:exp}
+
+\section{Môi trường và cấu hình}
+
+Toàn bộ thực nghiệm được triển khai trên môi trường điện toán đám mây
+\textbf{Google Colab} với bộ xử lý đồ họa (GPU) gia tốc. Để tối ưu vùng nhớ và tốc
+độ, đồ án sử dụng kỹ thuật \textbf{tính toán độ chính xác hỗn hợp} (mixed precision)
+thông qua \texttt{torch.amp} kết hợp \texttt{GradScaler}. Bảng~\ref{tab:hyper} tổng
+hợp các siêu tham số chính.
+
+\begin{table}[H]
+\centering
+\caption{Cấu hình môi trường và siêu tham số huấn luyện}
+\label{tab:hyper}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{@{}l X@{}}
+\toprule
+\textbf{Thành phần} & \textbf{Cấu hình} \\
+\midrule
+Bộ mã hóa văn bản (tháp Item) & \texttt{all-MiniLM-L6-v2} ($6$ tầng, $384$ chiều), đóng băng \\
+Tháp người dùng & MLP $384{\to}512{\to}384$, BatchNorm, ReLU, Dropout $0{,}5$ \\
+Hàm mất mát & InfoNCE (in-batch negatives), temperature $\tau = 0{,}1$ \\
+Bộ tối ưu & AdamW, learning rate $10^{-4}$, weight decay $0{,}05$ \\
+Batch size & $256$ \\
+Số epoch & $5$ (early stopping theo val loss) \\
+Độ chính xác & Mixed precision (FP16) trên GPU \\
+Nạp dữ liệu & Parquet + DataLoader $2$ worker, bất đồng bộ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Quy mô dữ liệu: khoảng $984.000$ tương tác huấn luyện ($3.844$ batch mỗi epoch),
+$146.396$ người dùng và hơn $17.000$ sản phẩm. Bảng~\ref{tab:time} phân rã thời gian
+một epoch: phần lớn dành cho huấn luyện ($\sim 38$ phút), phần còn lại cho tính mất
+mát kiểm định và đánh giá toàn kho ($\sim 11$ phút).
+
+\begin{table}[H]
+\centering
+\caption{Phân rã thời gian một epoch (tốc độ $\sim 1{,}7$ batch/giây)}
+\label{tab:time}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{0.8\textwidth}{@{}X r@{}}
+\toprule
+\textbf{Giai đoạn} & \textbf{Thời gian} \\
+\midrule
+Huấn luyện ($3.844$ batch)            & $\approx 38$ phút \\
+Tính mất mát kiểm định ($572$ batch)  & $\approx 5{,}7$ phút \\
+Mã hóa kho item + tính Recall/NDCG    & $\approx 5{,}4$ phút \\
+\midrule
+\textbf{Tổng mỗi epoch}               & $\approx 49$ phút \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Chi tiết vòng lặp huấn luyện}
+
+Vòng lặp huấn luyện kết hợp nhiều kỹ thuật để tối ưu tốc độ và bộ nhớ. Mỗi batch
+trải qua các bước: (1) mã hóa sản phẩm mục tiêu bằng tháp Item (không gradient);
+(2) đưa vector lịch sử qua tháp User; (3) tính InfoNCE; (4) lan truyền ngược. Toàn
+bộ phép tính tiến (forward) được bọc trong \texttt{autocast} để dùng FP16, còn
+\texttt{GradScaler} nhân tỷ lệ mất mát nhằm tránh tràn số (underflow) khi gradient
+quá nhỏ ở độ chính xác thấp.
+
+\begin{lstlisting}[language=Python, caption=Vòng lặp huấn luyện với mixed precision và early stopping]
+scaler = torch.amp.GradScaler('cuda')
+best_val_loss = float('inf'); patience_counter = 0
+
+for epoch in range(EPOCHS):
+    model.train(); total_loss = 0
+    for batch in train_loader:
+        item_tokens = {k: v.to(device) for k, v in batch["item_tokens"].items()}
+        optimizer.zero_grad()
+        with torch.amp.autocast('cuda'):          # mixed precision FP16
+            item_out = model.forward_item(item_tokens)        # thap dong bang
+            user_out = model.forward_user(batch["user_vectors"].to(device))
+            loss = loss_fn(user_out, item_out)                # InfoNCE
+        scaler.scale(loss).backward()              # scale tranh underflow
+        scaler.step(optimizer); scaler.update()
+        total_loss += loss.item()
+
+    val_loss = compute_loss(model, val_loader, loss_fn, device)
+    if val_loss < best_val_loss:                   # early stopping theo val loss
+        best_val_loss = val_loss; patience_counter = 0
+        torch.save(model.state_dict(), best_model_path)
+    else:
+        patience_counter += 1
+        if patience_counter >= PATIENCE: break
+\end{lstlisting}
+
+Cơ chế \textbf{early stopping} lưu lại trọng số tốt nhất mỗi khi mất mát kiểm định
+giảm và dừng huấn luyện nếu không cải thiện sau \texttt{PATIENCE} epoch -- bảo đảm
+mô hình cuối cùng là phiên bản tổng quát hóa tốt nhất, tránh lãng phí tính toán.
+
+\section{Thiết kế nạp dữ liệu theo batch}
+
+Việc nạp dữ liệu được tổ chức qua lớp \texttt{Dataset} trả về vector người dùng (đã
+tính sẵn) cùng văn bản sản phẩm mục tiêu, và một hàm \texttt{collate} gom batch:
+chỉ \textit{văn bản sản phẩm} mới cần tokenize tại thời điểm tạo batch, còn vector
+người dùng đã được mã hóa trước nên chỉ việc xếp chồng -- giảm đáng kể khối lượng
+tính toán lặp lại. \texttt{DataLoader} dùng $2$ worker và \texttt{pin\_memory} để
+nạp bất đồng bộ, che giấu độ trễ I/O sau thời gian tính toán của GPU.
+
+\begin{lstlisting}[language=Python, caption=Hàm collate chỉ tokenize nhánh sản phẩm]
+def collate_vector_fn(batch):
+    user_vectors = torch.stack([b["user_vector"] for b in batch])  # [B, 384]
+    item_texts = [b["item_text"] for b in batch]
+    item_tokens = tokenizer(item_texts, padding=True, truncation=True,
+                            max_length=128, return_tensors="pt")
+    return {"user_vectors": user_vectors, "item_tokens": item_tokens,
+            "target": [b["target"] for b in batch]}
+\end{lstlisting}
+
+\section{Giao thức đánh giá toàn kho (Full-catalog)}
+
+Một đóng góp quan trọng về mặt phương pháp là cách đánh giá. Nhiều nghiên cứu chỉ
+đánh giá trên một nhóm nhỏ mẫu âm lấy ngẫu nhiên (in-batch / sampled metrics), dẫn
+tới chỉ số bị \textit{thổi phồng} và không phản ánh độ khó thực tế. Đồ án triệt tiêu
+hoàn toàn thiên lệch này bằng giao thức \textbf{full-catalog}:
+
+\begin{enumerate}[leftmargin=2em, itemsep=2pt]
+    \item Mã hóa trước \textbf{toàn bộ} hơn $17.000$ sản phẩm thành ma trận vector
+    sản phẩm.
+    \item Với mỗi người dùng, tính độ tương đồng với \textit{tất cả} sản phẩm trong
+    kho, lấy Top-$50$.
+    \item Đo Recall@K và NDCG@K bằng cách kiểm tra sản phẩm mục tiêu thật có nằm
+    trong Top-$K$ hay không.
+\end{enumerate}
+
+Việc tính toán được chia theo cụm người dùng ($1.000$ người mỗi lần) để tránh tràn
+bộ nhớ GPU. Đây là cách đánh giá \textit{khắt khe và trung thực} nhất, vì người dùng
+phải cạnh tranh với toàn bộ kho sản phẩm.
+
+Về mặt kỹ thuật, nếu nhân trực tiếp ma trận người dùng ($146.396 \times 384$) với
+ma trận sản phẩm ($17.000 \times 384$) sẽ tạo ra ma trận điểm số khổng lồ vượt quá
+VRAM. Giải pháp là \textbf{xử lý theo cụm}: kho sản phẩm được mã hóa trước thành một
+ma trận cố định; sau đó với mỗi cụm $1.000$ người dùng, ta tính điểm số, lấy
+\texttt{topk} rồi giải phóng bộ nhớ trước khi sang cụm tiếp theo.
+
+\begin{lstlisting}[language=Python, caption=Đánh giá toàn kho theo cụm để tránh tràn VRAM]
+# Ma hoa truoc TOAN BO kho item mot lan
+all_item_emb = encode_all_items(item_ids, model)        # [N_items, 384]
+
+for i in range(0, num_users, 1000):                      # xu ly 1000 user/lan
+    user_chunk = all_user_emb[i:i+1000].to(device)
+    scores = torch.matmul(user_chunk, all_item_emb.T)    # [1000, N_items]
+    _, topk = torch.topk(scores, k=50, dim=1)            # lay Top-50
+    hits = (topk == target_chunk.view(-1, 1))            # vi tri trung
+    recall10 += hits[:, :10].any(dim=1).float().sum().item()
+    # ... cong don NDCG theo thu hang ...
+    del scores, topk; torch.cuda.empty_cache()           # giai phong VRAM
+\end{lstlisting}
+
+Nhờ chiến lược này, hệ thống có thể đánh giá trên toàn bộ $146.396$ người dùng $\times$
+$17.000$ sản phẩm mà vẫn nằm trong giới hạn bộ nhớ của một GPU phổ thông.
+
+\section{Kết quả huấn luyện}
+
+Hình~\ref{fig:loss} thể hiện đường cong mất mát qua $5$ epoch. Mất mát huấn luyện
+(InfoNCE) giảm rõ từ $3{,}62$ xuống $3{,}31$, trong khi mất mát kiểm định
+\textit{giảm đều đặn} từ $5{,}19$ xuống $5{,}16$ -- cho thấy mô hình hội tụ ổn định
+và \textbf{không bị quá khớp}. Cơ chế early stopping lưu lại mô hình tốt nhất tại
+mỗi lần val loss giảm; mô hình đạt trạng thái ổn định tại epoch thứ $5$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{loss_curve.png}
+\caption{Đường cong mất mát InfoNCE trên tập huấn luyện và kiểm định}
+\label{fig:loss}
+\end{figure}
+
+\section{Kết quả truy hồi trên toàn kho}
+
+Bảng~\ref{tab:results} trình bày kết quả Recall@K và NDCG@K theo từng epoch trên tập
+kiểm định, trực quan hóa ở Hình~\ref{fig:metrics}. Tại epoch $5$, mô hình đạt
+Recall@10 $= 0{,}0142$, Recall@50 $= 0{,}0436$, NDCG@10 $= 0{,}0062$ và NDCG@50
+$= 0{,}0125$.
+
+\begin{table}[H]
+\centering
+\caption{Kết quả truy hồi toàn kho theo từng epoch (tập kiểm định)}
+\label{tab:results}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{@{}c X X X X X@{}}
+\toprule
+\textbf{Epoch} & \textbf{Train loss} & \textbf{Val loss} & \textbf{Recall@10} &
+\textbf{Recall@50} & \textbf{NDCG@10} \\
+\midrule
+1 & $3{,}6168$ & $5{,}1875$ & $0{,}0140$ & $0{,}0431$ & $0{,}0061$ \\
+2 & $3{,}3495$ & $5{,}1790$ & $0{,}0140$ & $0{,}0435$ & $0{,}0061$ \\
+3 & $3{,}3229$ & $5{,}1755$ & $0{,}0141$ & $0{,}0429$ & $0{,}0061$ \\
+4 & $3{,}3138$ & $5{,}1692$ & $0{,}0141$ & $0{,}0434$ & $0{,}0061$ \\
+\textbf{5} & $\mathbf{3{,}3076}$ & $\mathbf{5{,}1649}$ & $\mathbf{0{,}0142}$ &
+$\mathbf{0{,}0436}$ & $\mathbf{0{,}0062}$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{metrics_curve.png}
+\caption{Recall@K (trái) và NDCG@K (phải) trên tập kiểm định qua các epoch}
+\label{fig:metrics}
+\end{figure}
+
+\subsection{So sánh với baseline ngẫu nhiên}
+
+Các con số tuyệt đối nói trên thoạt nhìn có vẻ nhỏ, nhưng cần đặt trong bối cảnh
+\textbf{kho hơn $17.000$ sản phẩm}. Nếu chọn ngẫu nhiên, xác suất trúng sản phẩm
+mục tiêu trong Top-$10$ chỉ là $10/17000 \approx 0{,}00059$. Như vậy, mô hình đề
+xuất đạt kết quả \textbf{vượt trội hơn $24$ lần} ở Top-$10$ và hơn $14$ lần ở
+Top-$50$ so với chọn ngẫu nhiên (Hình~\ref{fig:uplift}, lưu ý trục tung thang log).
+
+\begin{table}[H]
+\centering
+\caption{Bội số cải thiện của mô hình so với chọn ngẫu nhiên}
+\label{tab:uplift}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{0.9\textwidth}{@{}X r r r@{}}
+\toprule
+\textbf{Chỉ số} & \textbf{Ngẫu nhiên} & \textbf{Two-Tower} & \textbf{Bội số} \\
+\midrule
+Recall@10 & $0{,}00059$ & $0{,}0142$ & $\approx 24{,}1\times$ \\
+Recall@50 & $0{,}00294$ & $0{,}0436$ & $\approx 14{,}8\times$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{uplift_vs_random.png}
+\caption{Hiệu năng truy hồi của mô hình so với baseline chọn ngẫu nhiên}
+\label{fig:uplift}
+\end{figure}
+
+\section{Ví dụ gợi ý định tính}
+
+Để minh họa trực quan năng lực của mô hình, Bảng~\ref{tab:qual} trình bày Top-$5$
+sản phẩm được gợi ý cho một người dùng tiêu biểu có lịch sử thiên về phần mềm bảo
+mật và tiện ích hệ thống. Có thể thấy mô hình nắm bắt đúng "khẩu vị" ngữ nghĩa: các
+gợi ý đều thuộc nhóm bảo mật/tiện ích, dù người dùng chưa từng tương tác trực tiếp
+với chúng -- minh chứng cho khả năng khái quát hóa qua không gian vector ngữ nghĩa.
+
+\begin{table}[H]
+\centering
+\caption{Ví dụ Top-$5$ gợi ý dựa trên độ tương đồng vector}
+\label{tab:qual}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{@{}c X c@{}}
+\toprule
+\textbf{Hạng} & \textbf{Sản phẩm gợi ý} & \textbf{Cosine} \\
+\midrule
+1 & Norton 360 Deluxe -- Antivirus \& VPN            & $0{,}71$ \\
+2 & Malwarebytes Premium -- Anti-Malware             & $0{,}68$ \\
+3 & McAfee Total Protection                          & $0{,}66$ \\
+4 & CCleaner Professional -- System Utility          & $0{,}63$ \\
+5 & Acronis Cyber Protect -- Backup \& Security       & $0{,}61$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Phân tích không gian biểu diễn}
+
+Một góc nhìn hữu ích là so sánh mất mát với \textit{mức ngẫu nhiên}. Với batch
+$256$, hàm InfoNCE của một mô hình đoán ngẫu nhiên có giá trị $\ln(256) \approx
+5{,}55$. Như vậy, mất mát kiểm định $5{,}16$ chỉ \textit{nhỉnh hơn ngẫu nhiên một
+chút}, trong khi mất mát huấn luyện $3{,}31$ thấp hơn rõ rệt. Khoảng cách này cho
+biết: mô hình đã sắp xếp tốt không gian cho các tương tác trong tập huấn luyện, nhưng
+\textbf{khái quát hóa sang người dùng kiểm định còn hạn chế} -- điều dễ hiểu khi mục
+tiêu kiểm định (sản phẩm kề cuối theo thời gian) là một bài toán khó và tháp sản phẩm
+bị đóng băng nên không gian biểu diễn không được "uốn nắn" theo dữ liệu tương tác.
+
+Điều quan trọng là mất mát kiểm định vẫn \textit{giảm đơn điệu} qua cả $5$ epoch:
+mô hình không rơi vào quá khớp theo nghĩa cổ điển (val loss tăng trở lại), mà chạm
+tới một \textbf{trần khái quát hóa} do thiết kế đóng băng. Đây chính là cơ sở định
+lượng cho đề xuất "mở băng" tháp sản phẩm bằng LoRA ở chương kết luận.
+
+Về mặt định tính, khi chiếu các vector sản phẩm xuống không gian $2$ chiều (bằng
+t-SNE), ta kỳ vọng các sản phẩm cùng nhóm chức năng tụ lại thành cụm
+(Hình~\ref{fig:embspace}). Vector người dùng được đặt gần cụm phản ánh sở thích của
+họ, và Top-$N$ gợi ý chính là các sản phẩm gần nhất xung quanh điểm đó. Cấu trúc cụm
+này -- kế thừa từ tri thức ngôn ngữ của MiniLM -- là lý do mô hình hoạt động tốt cho
+cả sản phẩm mới chưa có lịch sử tương tác.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\textwidth]{embedding_space.png}
+\caption{Minh họa khái niệm không gian biểu diễn $2$ chiều của sản phẩm và người dùng}
+\label{fig:embspace}
+\end{figure}
+
+\section{Phân tích và thảo luận}
+
+Từ các kết quả trên, có thể rút ra một số nhận định:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Mô hình học được biểu diễn có ý nghĩa:} dù chỉ huấn luyện tháp
+    người dùng (tháp sản phẩm đóng băng), mô hình vẫn ánh xạ thành công lịch sử hành
+    vi sang không gian sản phẩm, đạt mức cải thiện hàng chục lần so với ngẫu nhiên
+    trên một kho rất lớn.
+    \item \textbf{Hội tụ nhanh và ổn định:} các chỉ số gần như bão hòa ngay từ epoch
+    đầu và nhích nhẹ qua các epoch sau, cho thấy bộ mã hóa MiniLM đóng băng đã cung
+    cấp một không gian biểu diễn tốt; phần việc còn lại của tháp người dùng tương đối
+    "dễ" và nhanh đạt giới hạn.
+    \item \textbf{Trần hiệu năng đến từ tháp đóng băng:} vì vector sản phẩm cố định
+    (không được tinh chỉnh theo dữ liệu tương tác), không gian biểu diễn chưa được
+    "uốn nắn" theo hành vi mua sắm thực tế -- đây vừa là ưu điểm (nhẹ, nhanh, chống
+    cold-start) vừa là hạn chế về độ chính xác, sẽ được bàn ở chương kết luận.
+    \item \textbf{Giá trị của đánh giá full-catalog:} con số tuyệt đối khiêm tốn
+    nhưng \textit{trung thực}; nếu dùng đánh giá lấy mẫu nhỏ, các chỉ số sẽ cao hơn
+    nhiều nhưng không phản ánh đúng năng lực thực tế của hệ thống.
+\end{itemize}

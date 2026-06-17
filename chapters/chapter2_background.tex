@@ -1,0 +1,317 @@
+% =====================================================================
+%  CHƯƠNG 2: CƠ SỞ LÝ THUYẾT
+% =====================================================================
+\chapter{Cơ sở lý thuyết}
+\label{chap:background}
+
+\section{Hệ thống gợi ý theo hướng truy hồi}
+
+Gọi tập người dùng là $U$ và tập sản phẩm là $I$. Thay vì dự đoán điểm số cho từng
+cặp như lọc cộng tác cổ điển, đồ án mô hình hóa bài toán theo hướng \textbf{truy hồi
+dựa trên biểu diễn} (embedding-based retrieval): mỗi người dùng $u$ và mỗi sản phẩm
+$i$ được ánh xạ thành các vector $\mathbf{u}, \mathbf{v} \in \mathbb{R}^d$ trong cùng
+một không gian. Mức độ phù hợp được đo bằng độ tương đồng cosine:
+
+\begin{equation}
+    \text{score}(u, i) = \cos(\mathbf{u}, \mathbf{v})
+    = \frac{\mathbf{u} \cdot \mathbf{v}}{\|\mathbf{u}\|\,\|\mathbf{v}\|}.
+\end{equation}
+
+Khi cả hai vector đã được chuẩn hóa $L_2$ (độ dài bằng $1$), độ tương đồng cosine
+trở thành tích vô hướng đơn giản. Gợi ý Top-$N$ chính là việc tìm $N$ sản phẩm có
+score cao nhất với người dùng -- một bài toán \textit{tìm kiếm láng giềng gần nhất}
+(nearest neighbor search) trong không gian vector, có thể tăng tốc bằng các thư viện
+chuyên dụng. Hướng tiếp cận này là nền tảng của các hệ thống gợi ý công nghiệp quy
+mô lớn nhờ khả năng tách biệt việc tính toán biểu diễn người dùng và sản phẩm.
+
+\section{Các hướng nghiên cứu liên quan}
+
+Lĩnh vực hệ thống gợi ý đã trải qua nhiều giai đoạn phát triển:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Lọc cộng tác cổ điển:} từ các phương pháp dựa trên láng giềng
+    (user/item-based KNN) tới \textit{phân rã ma trận} (Matrix Factorization, ALS),
+    học các nhân tố ẩn từ ma trận tương tác. Hạn chế chung là chỉ dùng tín hiệu định
+    danh và gặp khó với cold-start.
+    \item \textbf{Học sâu cho gợi ý:} các mô hình như Neural Collaborative Filtering
+    thay tích vô hướng bằng mạng nơ-ron để học tương tác phi tuyến, song vẫn dựa trên
+    embedding theo định danh.
+    \item \textbf{Truy hồi hai tháp:} được phổ biến bởi các hệ thống công nghiệp quy
+    mô lớn (YouTube, Google), kiến trúc hai tháp cho phép truy hồi ứng viên cực nhanh
+    từ kho hàng triệu mục, thường huấn luyện bằng học tương phản với mẫu âm trong
+    batch.
+    \item \textbf{Gợi ý dựa trên ngôn ngữ:} xu hướng gần đây kết hợp mô hình ngôn
+    ngữ để khai thác văn bản mô tả sản phẩm, giúp biểu diễn giàu ngữ nghĩa và giảm
+    phụ thuộc vào lịch sử tương tác -- đặc biệt hữu ích cho cold-start.
+\end{itemize}
+
+Đồ án kế thừa và kết hợp hai hướng cuối: dùng \textit{mô hình ngôn ngữ} làm tháp sản
+phẩm trong kiến trúc \textit{hai tháp}, huấn luyện bằng \textit{học tương phản} --
+một thiết kế hiện đại, phù hợp với bối cảnh dữ liệu lớn và đặc thù giàu văn bản của
+sản phẩm phần mềm.
+
+\section{Nền tảng dữ liệu lớn}
+
+\subsection{Apache Spark}
+
+\textbf{Apache Spark} là nền tảng tính toán phân tán cho phép xử lý dữ liệu quy mô
+lớn theo cơ chế song song trong bộ nhớ. Trong đồ án, Spark đảm nhận toàn bộ khâu
+tiền xử lý nặng: nạp dữ liệu JSON/JSONL thô, khử trùng lặp, ghép nối (join) các tập
+dữ liệu và biến đổi đặc trưng. API \texttt{DataFrame} cùng bộ tối ưu truy vấn
+\textit{Catalyst} giúp các phép biến đổi được thực thi hiệu quả; kỹ thuật
+\textbf{broadcast join} được dùng để ghép tập tương tác nhỏ với bảng dữ liệu lớn mà
+không gây xáo trộn (shuffle) tốn kém.
+
+\subsection{Định dạng cột Apache Parquet}
+
+Sau tiền xử lý, dữ liệu được lưu dưới định dạng \textbf{Apache Parquet} -- một định
+dạng lưu trữ \textit{theo cột} (columnar). So với định dạng dòng (CSV, JSON),
+Parquet mang lại các ưu điểm then chốt cho dữ liệu lớn:
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \textbf{Nén hiệu quả:} dữ liệu cùng cột có kiểu giống nhau nên nén tốt,
+    giảm đáng kể dung lượng lưu trữ.
+    \item \textbf{Đọc chọn lọc:} chỉ cần đọc các cột liên quan, giảm I/O.
+    \item \textbf{Tốc độ đọc/ghi cao:} phù hợp với các tác vụ phân tích và huấn
+    luyện lặp lại.
+\end{itemize}
+
+Để tăng tốc độ nạp dữ liệu khi huấn luyện, đồ án áp dụng kỹ thuật \textbf{nạp dữ
+liệu đa luồng bất đồng bộ} (asynchronous multi-worker loading) thông qua
+\texttt{DataLoader}, cho phép phần cứng CPU chuẩn bị batch tiếp theo trong khi GPU
+đang tính toán batch hiện tại.
+
+\section{Mô hình ngôn ngữ và biểu diễn văn bản}
+
+\subsection{Kiến trúc Transformer}
+
+\textbf{Mô hình ngôn ngữ} hiện đại dựa trên kiến trúc \textbf{Transformer} với cơ
+chế \textit{tự chú ý} (self-attention), cho phép mô hình nắm bắt mối quan hệ ngữ
+nghĩa giữa các từ trong văn bản bất kể khoảng cách. Cơ chế chú ý tính trọng số liên
+kết giữa các token dựa trên ba ma trận truy vấn (Query), khóa (Key) và giá trị
+(Value):
+
+\begin{equation}
+    \text{Attention}(Q, K, V) = \text{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V,
+\end{equation}
+
+trong đó $d_k$ là số chiều của vector khóa, đóng vai trò hệ số tỷ lệ giúp ổn định
+gradient. Mỗi tầng Transformer (Hình~\ref{fig:encoder}) gồm một khối \textit{chú ý
+đa đầu} (multi-head attention) và một mạng \textit{truyền thẳng} (feed-forward),
+mỗi khối kèm kết nối tắt (residual) và chuẩn hóa lớp (layer norm). MiniLM xếp chồng
+$6$ tầng như vậy. Nhờ tính toán song song trên toàn bộ chuỗi, Transformer học được
+biểu diễn ngữ cảnh phong phú.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    font=\scriptsize, node distance=0.45cm,
+    blk/.style={rectangle, rounded corners=2pt, draw=blue!55, fill=blue!8,
+        line width=0.7pt, text width=3.4cm, minimum height=0.6cm, align=center},
+    an/.style={rectangle, rounded corners=2pt, draw=teal!55, fill=teal!10,
+        line width=0.7pt, text width=3.4cm, minimum height=0.5cm, align=center},
+    a/.style={-{Stealth[length=1.8mm]}, line width=0.6pt, blue!55}
+]
+\node[blk, fill=gray!10, draw=gray!55] (in) {Embedding token + vị trí};
+\node[blk, above=of in] (mha) {Multi-Head\\Self-Attention};
+\node[an, above=of mha] (an1) {Add \& LayerNorm};
+\node[blk, above=of an1] (ffn) {Feed-Forward (FFN)};
+\node[an, above=of ffn] (an2) {Add \& LayerNorm};
+\node[blk, fill=gray!10, draw=gray!55, above=of an2] (out) {Biểu diễn ngữ cảnh};
+\draw[a] (in)--(mha); \draw[a] (mha)--(an1); \draw[a] (an1)--(ffn);
+\draw[a] (ffn)--(an2); \draw[a] (an2)--(out);
+% residual arrows
+\draw[a, gray!55, dashed] (in.east) -- ++(1.3,0) |- (an1.east);
+\draw[a, gray!55, dashed] (an1.west) -- ++(-1.3,0) |- (an2.west);
+\node[draw=blue!45, rounded corners=3pt, dashed, fit=(mha)(an1)(ffn)(an2),
+      inner sep=5pt, label={[font=\scriptsize\bfseries, blue!55!black]right:$\times\,6$ tầng}] {};
+\end{tikzpicture}
+\caption{Cấu trúc một tầng mã hóa Transformer (MiniLM xếp chồng $6$ tầng)}
+\label{fig:encoder}
+\end{figure} Đồ án sử dụng mô hình \texttt{all-MiniLM-L6-v2} thuộc họ
+\textit{Sentence-Transformers} -- một mô hình gọn nhẹ ($6$ tầng, đầu ra $384$ chiều,
+khoảng $22{,}7$ triệu tham số) được chưng cất (distillation) và tinh chỉnh chuyên để
+sinh \textbf{vector câu} (sentence embedding) chất lượng cao, cân bằng tốt giữa độ
+chính xác và tốc độ -- phù hợp với yêu cầu mã hóa hàng trăm nghìn văn bản.
+
+\subsection{Từ văn bản tới vector ngữ nghĩa}
+
+Văn bản mô tả sản phẩm (tiêu đề, tính năng, mô tả, danh mục\ldots) được đưa qua mô
+hình để thu các vector ngữ cảnh cho từng token. Để có một vector \textit{cố định}
+đại diện cho toàn bộ văn bản, đồ án áp dụng phép \textbf{trung bình có mặt nạ}
+(mean pooling) trên các token:
+
+\begin{equation}
+    \mathbf{v} = \frac{\sum_{t} m_t \, \mathbf{h}_t}{\sum_{t} m_t},
+\end{equation}
+
+với $\mathbf{h}_t$ là vector của token thứ $t$ và $m_t \in \{0, 1\}$ là mặt nạ chú ý
+(loại bỏ token đệm). Vector kết quả được chuẩn hóa $L_2$. Nhờ vậy, hai sản phẩm có
+mô tả tương đồng về ngữ nghĩa sẽ có vector gần nhau, giải quyết được vấn đề khởi động
+lạnh cho sản phẩm mới.
+
+\subsection{Tiền huấn luyện và Sentence-BERT}
+
+Sức mạnh của bộ mã hóa đến từ quá trình \textbf{tiền huấn luyện} (pre-training) trên
+kho văn bản khổng lồ, giúp mô hình tích lũy tri thức ngôn ngữ tổng quát trước khi áp
+dụng cho bài toán cụ thể. Tuy nhiên, các vector token từ BERT gốc không tối ưu cho
+việc đo độ tương đồng câu. \textbf{Sentence-BERT} khắc phục bằng cách tinh chỉnh mô
+hình theo cặp/bộ ba câu với mục tiêu sao cho các câu cùng nghĩa có vector gần nhau --
+chính là tinh thần của học tương phản. Mô hình \texttt{all-MiniLM-L6-v2} được huấn
+luyện trên hơn một tỷ cặp câu, nên vector $384$ chiều mà nó sinh ra mang chất lượng
+ngữ nghĩa cao, rất phù hợp để làm \textit{biểu diễn sản phẩm cố định} trong tháp Item.
+Đây là lý do đồ án có thể \textbf{đóng băng} tháp này mà vẫn thu được không gian biểu
+diễn tốt, tiết kiệm đáng kể tài nguyên huấn luyện.
+
+\section{Kiến trúc hai tháp (Two-Tower)}
+\label{sec:twotower}
+
+\textbf{Two-Tower} (hay \textit{dual encoder}) là kiến trúc gồm hai nhánh mạng độc
+lập (Hình~\ref{fig:twotower}): một \textbf{tháp sản phẩm} mã hóa sản phẩm và một
+\textbf{tháp người dùng} mã hóa người dùng, cùng cho ra vector trong một không gian
+chung. Điểm mạnh của kiến trúc này là hai tháp có thể tính toán \textit{tách rời}:
+toàn bộ vector sản phẩm có thể được mã hóa trước (offline) và lập chỉ mục, còn vector
+người dùng chỉ cần tính khi cần gợi ý -- nhờ vậy hệ thống truy hồi cực nhanh trên kho
+sản phẩm lớn.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+    node distance=0.5cm and 1.0cm,
+    box/.style={rectangle, rounded corners=3pt, draw=blue!55, fill=blue!9,
+        line width=0.8pt, text width=3.0cm, minimum height=0.8cm, font=\footnotesize},
+    frozen/.style={rectangle, rounded corners=3pt, draw=gray!60, fill=gray!12,
+        line width=0.8pt, text width=3.0cm, minimum height=0.8cm, font=\footnotesize},
+    op/.style={circle, draw=teal!65, fill=teal!12, line width=0.9pt,
+        minimum size=0.95cm, font=\small},
+    arr/.style={-{Stealth[length=2mm]}, line width=0.7pt, blue!60}
+]
+% User tower (left)
+\node[box] (uin) {Vector lịch sử người dùng (384-d)};
+\node[box, above=of uin] (ump) {Tháp User: MLP\\$384{\to}512{\to}384$\\BatchNorm + Dropout};
+\node[box, above=of ump] (unorm) {Chuẩn hóa $L_2$};
+\draw[arr] (uin) -- (ump);
+\draw[arr] (ump) -- (unorm);
+% Item tower (right)
+\node[frozen, right=2.4cm of uin] (iin) {Văn bản sản phẩm\\(semantic\_text)};
+\node[frozen, above=of iin] (ienc) {Tháp Item: MiniLM\\(\textbf{đóng băng})\\+ mean pooling};
+\node[frozen, above=of ienc] (inorm) {Chuẩn hóa $L_2$};
+\draw[arr, gray!60] (iin) -- (ienc);
+\draw[arr, gray!60] (ienc) -- (inorm);
+% similarity
+\node[op] (sim) at ($(unorm)!0.5!(inorm) + (0,1.2)$) {$\cos$};
+\draw[arr] (unorm) -- (sim);
+\draw[arr, gray!60] (inorm) -- (sim);
+\node[above=0.35cm of sim, font=\footnotesize\bfseries, text=teal!50!black]
+    {Độ tương đồng → Loss InfoNCE};
+\end{tikzpicture}
+\caption{Kiến trúc hai tháp (Two-Tower) với tháp sản phẩm đóng băng}
+\label{fig:twotower}
+\end{figure}
+
+Trong thiết kế của đồ án, \textbf{tháp sản phẩm được đóng băng hoàn toàn} (không cập
+nhật trọng số) nhằm tiết kiệm bộ nhớ và tận dụng tri thức ngôn ngữ sẵn có; chỉ
+\textbf{tháp người dùng} (một mạng nơ-ron đa tầng) được huấn luyện để học cách ánh
+xạ lịch sử hành vi sang không gian sản phẩm.
+
+\section{Học tương phản và hàm mất mát InfoNCE}
+\label{sec:infonce}
+
+\textbf{Học tương phản} (Contrastive Learning) huấn luyện mô hình bằng cách so sánh:
+với mỗi người dùng, sản phẩm thực sự tương tác (mẫu dương) cần được kéo lại gần,
+trong khi các sản phẩm khác (mẫu âm) bị đẩy ra xa. Đồ án sử dụng hàm mất mát
+\textbf{InfoNCE} với chiến lược \textit{mẫu âm trong batch} (in-batch negatives):
+trong một batch gồm $B$ cặp (người dùng, sản phẩm), sản phẩm của các cặp còn lại
+đóng vai trò mẫu âm cho người dùng đang xét. Hàm mất mát cho người dùng $i$ là:
+
+\begin{equation}
+    \mathcal{L}_i = -\log
+    \frac{\exp\!\big(\cos(\mathbf{u}_i, \mathbf{v}_i)/\tau\big)}
+         {\sum_{j=1}^{B} \exp\!\big(\cos(\mathbf{u}_i, \mathbf{v}_j)/\tau\big)},
+\end{equation}
+
+trong đó $\mathbf{v}_i$ là sản phẩm dương của người dùng $i$, $\mathbf{v}_j$ là các
+sản phẩm trong batch, và $\tau$ là \textit{tham số nhiệt độ} (temperature) điều
+chỉnh độ "sắc" của phân phối. Về bản chất, đây là một bài toán phân loại $B$ lớp mà
+nhãn đúng nằm trên đường chéo của ma trận tương đồng -- cài đặt hiệu quả bằng
+\texttt{CrossEntropyLoss}. Chiến lược in-batch negatives giúp tận dụng tối đa mỗi
+batch mà không cần lấy mẫu âm tường minh, rất phù hợp với huấn luyện quy mô lớn.
+Hình~\ref{fig:infonce} minh họa trực quan: ma trận tương đồng $B \times B$ giữa mọi
+người dùng và mọi sản phẩm trong batch, trong đó nhiệm vụ huấn luyện là làm cho các
+ô \textit{đường chéo} (cặp đúng) có giá trị cao nhất trên mỗi hàng.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.58\textwidth]{infonce_matrix.png}
+\caption{Ma trận tương đồng in-batch của InfoNCE; đường chéo là cặp dương cần tối đa hóa}
+\label{fig:infonce}
+\end{figure}
+
+\subsection{Vai trò của tham số nhiệt độ}
+
+Tham số nhiệt độ $\tau$ kiểm soát mức độ "gay gắt" của hàm mất mát. Khi $\tau$ nhỏ,
+mô hình \textit{trừng phạt mạnh} những mẫu âm khó (nằm gần mẫu dương), thúc đẩy phân
+tách rạch ròi trong không gian biểu diễn; khi $\tau$ lớn, gradient trải đều và mô
+hình "khoan dung" hơn. Về mặt lý thuyết, học tương phản tối ưu đồng thời hai tính
+chất: \textbf{alignment} (các cặp dương phải gần nhau) và \textbf{uniformity} (các
+biểu diễn phải trải đều trên mặt cầu đơn vị để giữ nhiều thông tin). Giá trị
+$\tau = 0{,}1$ được đồ án lựa chọn là một mức cân bằng phổ biến và hiệu quả cho bài
+toán gợi ý.
+
+\section{Tìm kiếm láng giềng gần nhất}
+\label{sec:ann}
+
+Sau khi huấn luyện, việc gợi ý Top-$N$ quy về tìm các sản phẩm có vector gần vector
+người dùng nhất. Với kho chỉ vài chục nghìn sản phẩm, ta có thể tính tương đồng
+\textit{vét cạn} (brute-force) như trong giao thức đánh giá của đồ án. Tuy nhiên, khi
+kho lên tới hàng triệu sản phẩm, phép vét cạn trở nên quá tốn kém cho yêu cầu thời
+gian thực. Khi đó, các kỹ thuật \textbf{tìm kiếm láng giềng gần nhất xấp xỉ}
+(Approximate Nearest Neighbor -- ANN) như chỉ mục đảo (IVF), lượng tử hóa tích
+(product quantization) hay đồ thị HNSW -- được hiện thực trong thư viện
+\textbf{FAISS} -- cho phép truy hồi trong vài phần nghìn giây với độ chính xác gần
+như không suy giảm. Kiến trúc hai tháp đặc biệt phù hợp với ANN vì toàn bộ vector
+sản phẩm có thể được lập chỉ mục trước. Đây là nền tảng cho hướng phát triển triển
+khai thời gian thực ở Chương~\ref{chap:conclusion}.
+
+\section{Các độ đo đánh giá}
+\label{sec:metrics}
+
+Vì bài toán là truy hồi Top-$N$, đồ án dùng hai độ đo xếp hạng phổ biến, tính trên
+\textbf{toàn bộ kho sản phẩm}. Với mỗi người dùng, gọi $\text{Rel}_u$ là tập sản
+phẩm thực sự liên quan và $\text{Rec}_u^K$ là Top-$K$ sản phẩm được gợi ý:
+
+\begin{equation}
+    \text{Recall@K} = \frac{|\text{Rec}_u^K \cap \text{Rel}_u|}{|\text{Rel}_u|}.
+\end{equation}
+
+Trong giao thức leave-one-out (mỗi người dùng có đúng một sản phẩm mục tiêu),
+Recall@K rút gọn thành tỷ lệ người dùng có sản phẩm mục tiêu nằm trong Top-$K$.
+\textbf{NDCG@K} bổ sung yếu tố thứ hạng, thưởng nhiều hơn khi sản phẩm đúng xuất hiện
+ở vị trí cao:
+
+\begin{equation}
+    \text{NDCG@K} = \frac{1}{\log_2(p + 1)},
+\end{equation}
+
+với $p$ là vị trí của sản phẩm mục tiêu trong danh sách gợi ý (nếu nằm trong Top-$K$,
+ngược lại bằng $0$). Việc đánh giá trên toàn kho $\sim 17.000$ sản phẩm khiến các
+con số tuyệt đối nhỏ, nhưng phản ánh \textit{trung thực} độ khó thực tế và cho phép
+so sánh công bằng với baseline chọn ngẫu nhiên.
+
+\subsection{Toàn kho và thiên lệch lấy mẫu}
+\label{sec:fullcatalog}
+
+Nhiều nghiên cứu đánh giá theo cách \textit{lấy mẫu} (sampled metric): trộn sản phẩm
+mục tiêu với một số ít mẫu âm (ví dụ $99$ hoặc $999$ sản phẩm) rồi xếp hạng trong
+nhóm nhỏ đó. Cách này nhanh nhưng gây \textbf{thiên lệch lạc quan}: kho ứng viên càng
+nhỏ, chỉ số càng cao một cách giả tạo. Hình~\ref{fig:evalproto} minh họa hiện tượng
+này -- cùng một mô hình, Recall@10 giảm mạnh từ khoảng $0{,}42$ (chỉ $100$ ứng viên)
+xuống $0{,}0142$ khi xếp hạng trên toàn bộ $17.000$ sản phẩm. Do đó, đồ án chủ trương
+đánh giá \textbf{toàn kho (full-catalog)} để có con số trung thực, dù khắt khe hơn.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.72\textwidth]{eval_protocol.png}
+\caption{Recall@10 giảm khi số ứng viên đánh giá tăng -- minh chứng thiên lệch lấy mẫu}
+\label{fig:evalproto}
+\end{figure}

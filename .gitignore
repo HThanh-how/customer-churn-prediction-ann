@@ -1,13 +1,38 @@
+# Python
 .venv/
+venv/
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .DS_Store
-*.log
+
+# Dữ liệu (không commit dataset lớn)
+data/
+*.json.gz
+
+# LaTeX build artifacts
 *.aux
-*.fdb_latexmk
-*.fls
 *.log
 *.out
-*.synctex.gz
 *.toc
+*.lof
+*.lot
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.synctex.gz
+*.xdv
+build*.log
+
+# Spark
+spark-warehouse/
+metastore_db/
+derby.log
+
+# Bản copy tạm khi xem PDF
+* - Copy.*
+*- Copy.*
+
+# File lạ không thuộc báo cáo
+images/Bang MTPV*

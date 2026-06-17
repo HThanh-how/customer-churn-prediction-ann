@@ -1,0 +1,91 @@
+% =====================================================================
+%  PHỤ LỤC
+% =====================================================================
+\appendix
+\renewcommand{\chaptername}{Phụ lục}
+
+\chapter{Hướng dẫn cài đặt và tái lập kết quả}
+\label{app:repro}
+
+Mã nguồn của đồ án gồm hai notebook chính, được tổ chức để bảo đảm khả năng
+\textbf{tái lập} (reproducibility):
+
+\begin{itemize}[leftmargin=2em, itemsep=2pt]
+    \item \texttt{ReSys\_xu\_ly\_du\_lieu\_pyspark.ipynb} -- tiền xử lý dữ liệu lớn
+    bằng PySpark, dựng \texttt{semantic\_text} và xuất Parquet.
+    \item \texttt{code\_trainning.ipynb} -- mã hóa trải nghiệm, tổng hợp lịch sử,
+    huấn luyện mô hình hai tháp và đánh giá full-catalog.
+\end{itemize}
+
+\begin{lstlisting}[language=bash, caption=Các lệnh cài đặt và chạy dự án]
+# 1. Tai ma nguon
+git clone <repo-url> && cd <repo>
+
+# 2. Cai dat thu vien (Google Colab khuyen nghi)
+pip install -q pyspark transformers sentence-transformers faiss-cpu pyarrow peft
+
+# 3. Tai du lieu Amazon Reviews 2023 - Software vao Google Drive
+#    Nguon: https://amazon-reviews-2023.github.io/
+
+# 4. Chay tien xu ly du lieu (Spark -> Parquet)
+jupyter notebook "ReSys_xu_ly_du_lieu_pyspark.ipynb"
+
+# 5. Huan luyen va danh gia mo hinh hai thap
+jupyter notebook code_trainning.ipynb
+
+# 6. Sinh lai hinh minh hoa & bien dich bao cao
+python scripts/generate_figures.py
+xelatex report.tex && xelatex report.tex
+\end{lstlisting}
+
+Tất cả thí nghiệm cố định \texttt{seed = 42}. Trên Google Colab với GPU, mỗi epoch
+mất khoảng $38$ phút huấn luyện cùng $\sim 11$ phút mã hóa và đánh giá toàn kho;
+toàn bộ $5$ epoch hoàn tất trong khoảng $4$ giờ.
+
+\chapter{Tổng hợp siêu tham số và kết quả đầy đủ}
+\label{app:hyper}
+
+\section*{B.1. Bảng tổng hợp siêu tham số}
+
+\begin{table}[H]
+\centering
+\caption{Tổng hợp siêu tham số của mô hình hai tháp}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{@{}l X@{}}
+\toprule
+\textbf{Thành phần} & \textbf{Giá trị} \\
+\midrule
+Bộ mã hóa (tháp Item) & \texttt{sentence-transformers/all-MiniLM-L6-v2}, $384$ chiều, đóng băng \\
+Tháp User & Linear$(384,512)$ + BatchNorm + ReLU + Dropout$(0{,}5)$ + Linear$(512,384)$ \\
+Pooling & Mean pooling có mặt nạ + chuẩn hóa $L_2$ \\
+Hàm mất mát & InfoNCE, temperature $\tau = 0{,}1$, mẫu âm trong batch \\
+Tối ưu & AdamW, lr $= 10^{-4}$, weight decay $= 0{,}05$ \\
+Batch size / Epoch & $256$ / $5$ (early stopping theo val loss, patience $= 1$) \\
+max\_length token & $128$ (mã hóa trải nghiệm) / $64$ (mã hóa kho item) \\
+Độ chính xác & Mixed precision FP16 (\texttt{torch.amp} + GradScaler) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section*{B.2. Bảng kết quả đầy đủ qua các epoch}
+
+\begin{table}[H]
+\centering
+\caption{Kết quả đầy đủ Recall@K và NDCG@K (tập kiểm định, toàn kho)}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{@{}c X X X X X X@{}}
+\toprule
+\textbf{Epoch} & \textbf{Train} & \textbf{Val} & \textbf{R@10} & \textbf{R@50} &
+\textbf{N@10} & \textbf{N@50} \\
+\midrule
+1 & $3{,}6168$ & $5{,}1875$ & $0{,}0140$ & $0{,}0431$ & $0{,}0061$ & $0{,}0124$ \\
+2 & $3{,}3495$ & $5{,}1790$ & $0{,}0140$ & $0{,}0435$ & $0{,}0061$ & $0{,}0124$ \\
+3 & $3{,}3229$ & $5{,}1755$ & $0{,}0141$ & $0{,}0429$ & $0{,}0061$ & $0{,}0123$ \\
+4 & $3{,}3138$ & $5{,}1692$ & $0{,}0141$ & $0{,}0434$ & $0{,}0061$ & $0{,}0124$ \\
+5 & $3{,}3076$ & $5{,}1649$ & $0{,}0142$ & $0{,}0436$ & $0{,}0062$ & $0{,}0125$ \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Mất mát kiểm định giảm đơn điệu qua cả $5$ epoch, các chỉ số truy hồi nhích tăng và
+ổn định -- khẳng định mô hình hội tụ tốt và không quá khớp.
